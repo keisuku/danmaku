@@ -121,35 +121,35 @@ function wallFrom(side,v){
     else if(side===1)shot(W+14,p,Math.PI,v*U,COL.wall);else shot(-14,p,0,v*U,COL.wall);}
 }
 function ringAt(){
-  const R=Math.hypot(W,H)*.6,n=22,gap=rnd(n),cx=me.x,cy=me.y;
-  for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,92*U,COL.ring)}
+  const R=Math.hypot(W,H)*.6,n=26,gap=rnd(n),cx=me.x,cy=me.y;
+  for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,104*U,COL.ring)}
 }
 function spinFrom(cx,cy,delay){
   const b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
-  emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/22,n:22,iv:.07,t:delay||0,sp:132,c:COL.spin});
+  emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/30,n:30,iv:.055,t:delay||0,sp:148,c:COL.spin});
 }
 const PATTERNS=[
- {name:'扇',lv:0,run(l){const k=2+Math.min(2,l/3|0);for(let i=0;i<k;i++)later(i*.95,()=>fanAt(Math.min(11,7+(l/3|0)),122));return k*.95+1.4}},
- {name:'豪雨',lv:0,run(l){const side=rnd(4),n=Math.min(64,34+l*3),b=[Math.PI/2,Math.PI,-Math.PI/2,0][side];
+ {name:'扇',lv:0,run(l){const k=2+Math.min(2,l/3|0);for(let i=0;i<k;i++)later(i*.95,()=>fanAt(Math.min(15,9+(l/2|0)),138));return k*.95+1.4}},
+ {name:'豪雨',lv:0,run(l){const side=rnd(4),n=Math.min(110,56+l*6),b=[Math.PI/2,Math.PI,-Math.PI/2,0][side];
    for(let i=0;i<n;i++)later(i*4/n,()=>{const q=Math.random();
      const x=side===0||side===2?q*W:side===1?W+14:-14,y=side===1||side===3?q*H:side===0?-14:H+14;
-     shot(x,y,b+(Math.random()-.5)*.9,(88+Math.random()*55)*U,COL.wall)});return 5.2}},
+     shot(x,y,b+(Math.random()-.5)*.9,(100+Math.random()*60)*U,COL.wall)});return 5.2}},
  {name:'花火',lv:1,run(l){const k=3+Math.min(2,l/4|0);
    for(let i=0;i<k;i++)later(i*.75,()=>{const [x,y]=edge(),b=Math.atan2(H/2-y,W/2-x);
-     for(let j=0;j<14;j++)shot(x,y,b+(j/13-.5)*Math.PI*.95,86*U,COL.bloom)});return k*.75+2.6}},
- {name:'壁',lv:1,run(l){const s=rnd(4),k=l>=5?3:2;for(let i=0;i<k;i++)later(i*1.8,()=>wallFrom((s+i+(i?rnd(2):0))%4,84));return k*1.8+2.2}},
- {name:'十字砲火',lv:2,run(l){const n=6+Math.min(4,l/3|0);
-   [[-10,-10],[W+10,-10],[W+10,H+10],[-10,H+10]].forEach((c,i)=>emitters.push({x:c[0],y:c[1],aim:true,a:0,da:0,n,iv:.3,t:i*.4,sp:128,c:COL.aim}));
-   return n*.3+1.2+1.8}},
+     for(let j=0;j<20;j++)shot(x,y,b+(j/19-.5)*Math.PI*.95,98*U,COL.bloom)});return k*.75+2.6}},
+ {name:'壁',lv:1,run(l){const s=rnd(4),k=l>=5?3:2;for(let i=0;i<k;i++)later(i*1.8,()=>wallFrom((s+i+(i?rnd(2):0))%4,95));return k*1.8+2.2}},
+ {name:'十字砲火',lv:2,run(l){const n=9+Math.min(5,l/2|0);
+   [[-10,-10],[W+10,-10],[W+10,H+10],[-10,H+10]].forEach((c,i)=>emitters.push({x:c[0],y:c[1],aim:true,a:0,da:0,n,iv:.24,t:i*.4,sp:145,c:COL.aim}));
+   return n*.24+1.2+1.8}},
  {name:'渦',lv:2,run(l){const x=Math.random()<.5?-10:W+10,y=Math.random()<.5?-10:H+10;spinFrom(x,y);
    if(l>=6)spinFrom(W-x,H-y,.9);return 4.4}},
  {name:'掃射',lv:3,run(){const sp=27*U,n=Math.ceil(W/sp)+1,g1=1+rnd(n-5),g2=1+rnd(n-5),rev=Math.random()<.5;
    for(let i=0;i<n;i++){const xi=(rev?n-1-i:i)*sp;
-     if(i<g1||i>=g1+3)later(i*.07,()=>shot(xi,-14,Math.PI/2,118*U,COL.spin));
-     if(i<g2||i>=g2+3)later(n*.07+.7+i*.07,()=>shot(W-xi,H+14,-Math.PI/2,118*U,COL.spin));}
+     if(i<g1||i>=g1+3)later(i*.07,()=>shot(xi,-14,Math.PI/2,132*U,COL.spin));
+     if(i<g2||i>=g2+3)later(n*.07+.7+i*.07,()=>shot(W-xi,H+14,-Math.PI/2,132*U,COL.spin));}
    return n*.14+.7+2.6}},
  {name:'輪',lv:3,run(l){ringAt();if(l>=7)later(2.4,ringAt);return l>=7?6.6:4.4}},
- {name:'挟撃',lv:4,run(){wallFrom(1,66);wallFrom(3,66);return 4.6}}
+ {name:'挟撃',lv:4,run(){wallFrom(1,76);wallFrom(3,76);return 4.6}}
 ];
 function startGame(){
   state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
@@ -189,12 +189,12 @@ function update(dt){
       surgeEnd=T+p.run(level);nextEvent=surgeEnd+Math.max(2.2,3.6-level*.1);level++;surgeName=p.name;surgeAt=T;beep(330,.12,.03);
     }
   }
-  spawnAcc+=dt*(playing?(T<surgeEnd?.4:1)*Math.min(6.5,2.4+level*.4):2.2);
+  spawnAcc+=dt*(playing?(T<surgeEnd?.5:1)*Math.min(15,5.5+level*.85):2.2);
   while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=Math.random();
     if(!playing)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*1.6,70*U*(.8+Math.random()*.45),COL.aim);
     else{
-      const base=(92+Math.min(level,12)*3.5)*U;
-      if(k<.06)shot(x,y,toMe(x,y)+(Math.random()-.5)*.3,215*U,COL.fast,3.6);                                         // 速い弾は少しだけ
+      const base=(108+Math.min(level,12)*4)*U;
+      if(k<.06)shot(x,y,toMe(x,y)+(Math.random()-.5)*.3,235*U,COL.fast,3.6);                                         // 速い弾は少しだけ
       else if(k<.4)shot(x,y,toMe(x,y)+(Math.random()-.5)*.6,base*(.9+Math.random()*.3),COL.aim);                      // 自機狙い
       else if(k<.9)shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*(.65+Math.random()*.6),COL.stray);  // 流れ弾
       else shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*.5,COL.slow,7);                             // 遅くて大きい弾
