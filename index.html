@@ -111,28 +111,28 @@ function edge(){const m=14,p=Math.random()*(2*W+2*H);
 function shot(x,y,a,sp,c,r){bullets.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,c,r:(r||4.4)*U,seen:false,life:0,gz:false})}
 
 function event(){
-  const pool=['fan'];if(T>12)pool.push('wall');if(T>20)pool.push('spin');if(T>30)pool.push('ring','fan');
+  const pool=['fan'];if(T>5)pool.push('wall');if(T>9)pool.push('spin');if(T>14)pool.push('ring');
   const k=pool[Math.random()*pool.length|0];
   if(k==='fan'){
-    const [x,y]=edge(),b=Math.atan2(me.y-y,me.x-x),n=Math.min(13,7+(T/15|0));
-    for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.13,(118+Math.min(T,80)*.5)*U,COL.fan);
+    const [x,y]=edge(),b=Math.atan2(me.y-y,me.x-x),n=Math.min(17,9+(T/8|0));
+    for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.13,(150+Math.min(T,60)*1.5)*U,COL.fan);
   }else if(k==='wall'){
-    const side=Math.random()*4|0,sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+Math.random()*(n-5)|0,v=76*U;
-    for(let i=0;i<n;i++){if(i>=gap&&i<gap+3)continue;const p=i*sp;
+    const side=Math.random()*4|0,sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+Math.random()*(n-5)|0,v=Math.min(160,100+T)*U,gw=T>30?2:3;
+    for(let i=0;i<n;i++){if(i>=gap&&i<gap+gw)continue;const p=i*sp;
       if(side===0)shot(p,-14,Math.PI/2,v,COL.wall);else if(side===2)shot(p,H+14,-Math.PI/2,v,COL.wall);
       else if(side===1)shot(W+14,p,Math.PI,v,COL.wall);else shot(-14,p,0,v,COL.wall);}
   }else if(k==='spin'){
     const cx=Math.random()<.5?-10:W+10,cy=Math.random()<.5?-10:H+10,b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
-    emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/22,n:22,iv:.07,t:0});
+    emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/32,n:32,iv:.05,t:0});
   }else{
-    const R=Math.hypot(W,H)*.6,n=22,gap=Math.random()*n|0,cx=me.x,cy=me.y;
+    const R=Math.hypot(W,H)*.6,n=28,gap=Math.random()*n|0,cx=me.x,cy=me.y;
     for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;
-      shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,82*U,COL.ring);}
+      shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,Math.min(150,105+T*.6)*U,COL.ring);}
   }
 }
 
 function startGame(){
-  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=5;shake=0;
+  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=2;shake=0;
   me.x=W/2;me.y=H*.68;me.trail=[];me.bank=0;me.lx=me.x;btn.classList.remove('on');
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
@@ -161,19 +161,19 @@ function update(dt){
   }
   // 絶え間なく降る狙い弾
   const tx=playing?me.x:W/2,ty=playing?me.y:H*.42;
-  spawnAcc+=dt*(playing?Math.min(9,1.7+T*.11):2.2);
+  spawnAcc+=dt*(playing?Math.min(24,4.5+T*.4):2.2);
   while(spawnAcc>1){spawnAcc--;const [x,y]=edge();
-    shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*(playing?.7:1.6),(playing?96+Math.min(T,90)*1.5:70)*U*(.8+Math.random()*.45),COL.aim)}
-  if(playing&&T>nextEvent){event();nextEvent=T+Math.max(1.6,4.5-T*.035)}
+    shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*(playing?.7:1.6),(playing?125+Math.min(T,60)*2.7:70)*U*(.8+Math.random()*.45),COL.aim)}
+  if(playing&&T>nextEvent){event();if(T>25)event();if(T>50)event();nextEvent=T+Math.max(.75,2.6-T*.045)}
   for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];e.t-=dt;
-    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.a,128*U,COL.spin);e.a+=e.da;e.n--;e.t+=e.iv}
+    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.a,175*U,COL.spin);e.a+=e.da;e.n--;e.t+=e.iv}
     if(e.n<=0)emitters.splice(i,1)}
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life+=dt;
     const inside=b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20;
     if(inside)b.seen=true;else if(b.seen||b.life>14){bullets.splice(i,1);continue}
     if(playing){
-      const dx=b.x-me.x,dy=b.y-me.y,d2=dx*dx+dy*dy,hit=b.r*.75+2.4*U;
+      const dx=b.x-me.x,dy=b.y-me.y,d2=dx*dx+dy*dy,hit=b.r*.75+2*U;
       if(d2<hit*hit){die();return}
       if(!b.gz&&d2<Math.pow(b.r+13*U,2)){b.gz=true;beep(1500,.03,.012);
         for(let k=0;k<4;k++){const a=Math.random()*TAU;sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*90*U,vy:Math.sin(a)*90*U,l:.6,c:'#ffffff'})}}
@@ -191,7 +191,7 @@ function drawGame(){
   g.globalAlpha=1;
   for(const p of sparks){g.globalAlpha=clamp(p.l,0,1);dot(p.c,p.x,p.y,1.6*U)}g.globalAlpha=1;
   if(state==='play'){
-    for(let i=0;i<me.trail.length;i+=2){g.globalAlpha=i/me.trail.length*.28;dot(COL.me,me.trail[i],me.trail[i+1]+11*U,1.8*U)}
+    for(let i=0;i<me.trail.length;i+=2){g.globalAlpha=i/me.trail.length*.28;dot(COL.me,me.trail[i],me.trail[i+1]+6*U,1.1*U)}
     g.globalAlpha=1;drawShip();
   }
   g.globalCompositeOperation='source-over';
@@ -209,7 +209,7 @@ function drawGame(){
 function poly(p,m){g.beginPath();for(let i=0;i<p.length;i+=2)g[i?'lineTo':'moveTo'](p[i]*m,p[i+1]);g.closePath()}
 function drawShip(){
   const b=me.bank||0,fl=.75+.25*Math.sin(clock*55)+Math.random()*.15;
-  g.save();g.translate(me.x,me.y);g.rotate(b*.22);g.scale(U*(1-.38*Math.abs(b)),U);
+  g.save();g.translate(me.x,me.y);g.rotate(b*.22);g.scale(U*.5*(1-.38*Math.abs(b)),U*.5);
   // 噴射炎
   g.globalCompositeOperation='lighter';
   for(const sx of [-1.7,1.7]){dot('#45d9ff',sx,13,2.2);dot('#7fe9ff',sx,13+4*fl,1.7*fl);dot('#ff4fd8',sx,13+9*fl,1.1*fl)}
@@ -237,7 +237,7 @@ function drawShip(){
   g.fillStyle='#1a2c55';g.fillRect(-2.6,11,1.9,1.8);g.fillRect(.7,11,1.9,1.8);
   g.restore();
   // 当たり判定の芯
-  g.globalCompositeOperation='lighter';dot('#ff4fd8',me.x,me.y,1.5*U);g.globalCompositeOperation='source-over';
+  g.globalCompositeOperation='lighter';dot('#ff4fd8',me.x,me.y,1*U);g.globalCompositeOperation='source-over';
 }
 
 function drawTitle(){
