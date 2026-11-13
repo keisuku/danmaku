@@ -24,11 +24,14 @@ html{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 @supports (height:1dvh){#stage{width:min(100%,62dvh)}}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-#again{position:absolute;left:50%;bottom:14px;transform:translate(-50%,8px);
-  font:15px/1 var(--f-dot);letter-spacing:.35em;text-indent:.35em;color:var(--ink);
-  background:rgba(5,4,10,.6);border:1px solid var(--dim);border-radius:2px;padding:13px 30px;
-  opacity:0;pointer-events:none;transition:opacity .5s,transform .5s;cursor:pointer}
-#again.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+#bar{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:center;gap:10px}
+#again,#copy2{font:15px/1 var(--f-dot);letter-spacing:.35em;text-indent:.35em;color:var(--ink);
+  background:rgba(5,4,10,.6);border:1px solid var(--dim);border-radius:2px;padding:13px 26px;
+  opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .5s,transform .5s;cursor:pointer}
+#copy2{font-size:12px;letter-spacing:.08em;text-indent:0;padding:13px 14px;border-color:var(--line);color:var(--dim)}
+#again.on,#again.on~#copy2{opacity:1;pointer-events:auto;transform:none}
+#copy2:active{background:var(--ink);color:var(--void)}
+#copy2:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
 #again:active{background:var(--ink);color:var(--void)}
 [hidden]{display:none!important}
 #copy{position:absolute;left:12px;top:44px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
@@ -59,7 +62,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 <!--page-->
 <div id="stage">
   <canvas id="c" aria-label="的 MATO：全方向から飛んでくる弾を避け続けるゲーム"></canvas>
-  <button id="again" type="button">もう一度</button>
+  <div id="bar"><button id="again" type="button">もう一度</button><button id="copy2" type="button" hidden>最高記録をコピー</button></div>
   <button id="copy" type="button" hidden>最高記録をコピー</button>
   <textarea id="recout" readonly hidden aria-label="最高記録の文字列"></textarea>
   <div id="vp" hidden>
@@ -305,7 +308,7 @@ async function saveRec(){
   let body=raw,z=0;
   try{if(window.CompressionStream){body=await pipe(raw,CompressionStream);z=1}}catch(e){body=raw;z=0}
   const head=`MATO1:${sd}:${w}:${h}:${n}:${day}:${z}:${b64e(body)}`;
-  try{localStorage.setItem('mato.rec',head+':'+fnv(head))}catch(e){}
+  try{localStorage.setItem('mato3.rec',head+':'+fnv(head))}catch(e){}
 }
 async function parseRec(str){
   const t=str.replace(/\s+/g,''),k=t.lastIndexOf(':');if(k<0||fnv(t.slice(0,k))!==t.slice(k+1))return null;
@@ -403,7 +406,7 @@ function drawTitle(){
   txt(sound?'音 ON':'音 OFF',W-18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','right',1);
   const b=best();if(b>0)txt('自己最高 '+b.toFixed(2)+' 秒',18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
 }
-function best(){try{return parseFloat(localStorage.getItem('mato.best'))||0}catch(e){return 0}}
+function best(){try{return parseFloat(localStorage.getItem('mato3.best'))||0}catch(e){return 0}}
 
 /* =====================================================================
    終了画面 ―― 受け取るのは「生き残った秒数」ひとつだけ。
@@ -456,7 +459,7 @@ const End={
     this.te=calm?9:0;this.ticked=0;this.locked=this.slammed=this.shown=false;
     this.idx=RANKS.reduce((a,r,i)=>t>=r.min?i:a,0);this.rank=RANKS[this.idx];
     const P=this.rank.pal;this.cols=[0,1,2,3,4,5].map(i=>i<3?mix(P[0],P[1],i/2.5):mix(P[1],P[2],(i-2)/3));
-    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato.best',t.toFixed(2))}catch(e){}}
+    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato3.best',t.toFixed(2))}catch(e){}}
     // 秒数を種にして、弾幕の紋を組む。長く生きるほど、層が重なり大きく咲く。
     const R=rng(Math.round(t*100)+7),n=[5,6,7,8,9,10,12][R()*7|0];
     const L=clamp(2+Math.floor(Math.log2(1+t)*1.35),2,11),ext=this.ext=.42+.58*(L-2)/9,r0=.25;
@@ -485,7 +488,7 @@ const End={
     // ---- 進行に合わせた一度きりの合図
     if(!this.locked&&te>=2.05){this.locked=true;beep(660,.25,.05);beep(990,.35,.04);buzz(20)}
     if(!this.slammed&&te>=2.45){this.slammed=true;beep(110,.5,.22,'sine',38);noise(.25,.16);buzz(60);if(!calm&&te<3)shake=9}
-    if(!this.shown&&te>=4.1){this.shown=true;btn.classList.add('on')}
+    if(!this.shown&&te>=4.1){this.shown=true;document.getElementById('copy2').hidden=!getRec();btn.classList.add('on')}
     // ---- 地
     g.fillStyle=rgba('#05040a',fa(0,.45));g.fillRect(0,0,W,H);
     const A=fa(.2,.6);
@@ -620,12 +623,13 @@ try{
 }catch(e){}
 
 /* ---------- 最高記録のコピー（タイトル画面） ---------- */
-const getRec=()=>{try{return localStorage.getItem('mato.rec')||''}catch(e){return''}};
+const getRec=()=>{try{return localStorage.getItem('mato3.rec')||''}catch(e){return''}};
 copyBtn.hidden=!getRec();
-copyBtn.addEventListener('click',async()=>{
+const copy2=document.getElementById('copy2');
+for(const el of [copyBtn,copy2])el.addEventListener('click',async()=>{
   const t=getRec();if(!t)return;
-  try{await navigator.clipboard.writeText(t);copyBtn.textContent='コピーしました';setTimeout(()=>copyBtn.textContent='最高記録をコピー',2000)}
-  catch(e){recOut.value=t;recOut.hidden=false;recOut.focus();recOut.select();copyBtn.textContent='下の文字列を全選択してコピー'}
+  try{await navigator.clipboard.writeText(t);el.textContent='コピーしました';setTimeout(()=>el.textContent='最高記録をコピー',2000)}
+  catch(e){recOut.value=t;recOut.hidden=false;recOut.focus();recOut.select();el.textContent='上の文字列を全選択してコピー'}
 });
 
 /* ---------- 照合の画面： #verify ---------- */
