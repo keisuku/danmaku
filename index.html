@@ -41,6 +41,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 #vp textarea{height:110px;font:11px/1.4 var(--f-dot);color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:2px;padding:8px;min-width:0}
 #vp .row{display:flex;gap:10px;flex-wrap:wrap}
 #vp button{font:13px/1 var(--f-dot);letter-spacing:.15em;color:var(--ink);background:transparent;border:1px solid var(--dim);border-radius:2px;padding:10px 16px;cursor:pointer}
+#vbig{font:800 30px/1.25 var(--f-mincho);letter-spacing:.04em}
+#vbig.ok{color:#5dffb0;text-shadow:0 0 18px rgba(93,255,176,.6)}
+#vbig.warn{color:#ffd24a;text-shadow:0 0 18px rgba(255,210,74,.6)}
+#vbig.ng{color:#ff2a4f;font-size:min(31px,7.6vw);white-space:nowrap;text-shadow:0 0 24px rgba(255,42,79,.9);animation:alarm .5s steps(2) infinite}
+#vp.ng{background:rgba(60,0,12,.92);border-bottom:2px solid #ff2a4f;box-shadow:0 0 60px rgba(255,42,79,.55)}
+@keyframes alarm{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#vbig.ng{animation:none}}
 #vout{white-space:pre-line;color:var(--dim)}
 #vout.ok{color:#5dffb0}#vout.ng{color:#ff4f6d}#vout.warn{color:#ffd24a}
 #copy:focus-visible,#vp button:focus-visible,#vp textarea:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
@@ -59,6 +66,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
     <h2>的 MATO 記録の照合</h2>
     <textarea id="rec" placeholder="参加者から届いた記録（MATO1: で始まる文字列）を貼り付けてください"></textarea>
     <div class="row"><button id="chk" type="button">照合する</button><button id="spd" type="button" hidden>等速で見る</button></div>
+    <div id="vbig" hidden></div>
     <div id="vout" role="status"></div>
   </div>
 </div>
@@ -624,18 +632,21 @@ copyBtn.addEventListener('click',async()=>{
 const vp=document.getElementById('vp'),vout=document.getElementById('vout'),spd=document.getElementById('spd'),recIn=document.getElementById('rec');
 if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;copyBtn.hidden=true}
 document.getElementById('chk').addEventListener('click',async()=>{
-  vout.className='';spd.hidden=true;rp=null;state='verify';bullets=[];
+  wake();vout.className='';spd.hidden=true;rp=null;state='verify';bullets=[];
+  const big=document.getElementById('vbig'),say=(cls,head)=>{big.hidden=false;big.className=cls;big.textContent=head;vp.className=cls;
+    if(cls==='ng'){for(let i=0;i<6;i++)setTimeout(()=>beep(i%2?620:880,.16,.09,'sawtooth'),i*170);buzz([120,60,120,60,240])}else if(cls==='ok')beep(880,.3,.05)};
   let r=null;try{r=await parseRec(recIn.value)}catch(e){}
-  if(!r){vout.className='ng';vout.textContent='記録を読み取れません。貼り付けが途中で切れていないか確かめてください。';return}
+  if(!recIn.value.trim()){say('ng','記録がありません');vout.className='ng';vout.textContent='記録の提出がない記録は、認められません。';return}
+  if(!r){say('ng','記録を確認できません');vout.className='ng';vout.textContent='書き換えられているか、貼り付けが途中で切れています。全文を送り直してもらってください。';return}
   const c=checkRec(r),sec=Math.floor(r.n*STEP*100+1e-6)/100,day=r.day.slice(0,4)+'.'+r.day.slice(4,6)+'.'+r.day.slice(6);
   const warn=[];
   if(r.H/r.W<1.55||r.H/r.W>2.45||r.W<280||r.W>720)warn.push(`画面の寸法が不自然です（${Math.round(r.W)}×${Math.round(r.H)}）`);
   if(c.maxMove>400)warn.push('一瞬で画面を大きく飛び越えたコマがあります');
   if(c.out)warn.push('画面の外に出たコマがあります');
-  if(c.hitAt>0&&c.hitAt<r.n){vout.className='ng';
+  if(c.hitAt>0&&c.hitAt<r.n){say('ng','不正を検知しました！！');vout.className='ng';
     vout.textContent=`無効。この動きでは ${(c.hitAt*STEP).toFixed(2)} 秒で被弾します（記録上は ${sec.toFixed(2)} 秒）。`}
-  else if(warn.length){vout.className='warn';vout.textContent=`要注意。${sec.toFixed(2)} 秒まで被弾はありませんが、${warn.join('。')}。`}
-  else{vout.className='ok';
+  else if(warn.length){say('warn','要注意');vout.className='warn';vout.textContent=`要注意。${sec.toFixed(2)} 秒まで被弾はありませんが、${warn.join('。')}。`}
+  else{say('ok','照合成功');vout.className='ok';
     vout.textContent=`有効。${sec.toFixed(2)} 秒 ／ ${day} ／ 認証 ${proof(Math.round(sec*100),r.day)}\nスクショの秒数・日付・認証と同じか確かめてください。`}
   recIn.hidden=true;loadRec(r);rp={r,i:0,speed:4,done:false,dead:false};state='replay';spd.hidden=false;spd.textContent='等速で見る';
 });
