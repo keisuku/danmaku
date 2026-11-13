@@ -100,8 +100,8 @@ function txt(s,x,y,font,col,align,ls,glow,blur){
 /* =====================================================================
    ゲーム本体
    ===================================================================== */
-const COL={aim:'#ff4fd8',fan:'#ffb347',wall:'#45d9ff',ring:'#a98bff',spin:'#5dffb0',me:'#7fe9ff',stray:'#8ea2ff',slow:'#ff7a5c'};
-let lastKind='',lastHard=false,state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
+const COL={aim:'#ff4fd8',fan:'#ffb347',wall:'#45d9ff',ring:'#a98bff',spin:'#5dffb0',me:'#7fe9ff',stray:'#8ea2ff',slow:'#ff7a5c',fast:'#fff27a',bloom:'#ff9de0'};
+let timers=[],level=0,lastP=null,surgeEnd=0,surgeName='',surgeAt=-9,state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
 let me={x:0,y:0,trail:[]},spawnAcc=0,nextEvent=0,dieT=0,shake=0;
 const keys={};
 for(let i=0;i<46;i++)stars.push({x:Math.random(),y:Math.random(),s:.2+Math.random()*.8});
@@ -110,31 +110,49 @@ function edge(){const m=14,p=Math.random()*(2*W+2*H);
   return p<W?[p,-m]:p<W+H?[W+m,p-W]:p<2*W+H?[p-W-H,H+m]:[-m,p-2*W-H]}
 function shot(x,y,a,sp,c,r){bullets.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,c,r:(r||4.4)*U,seen:false,life:0,gz:false})}
 
-function event(){
-  // 難しい動き（渦・輪）は続けて出さない。同じ型も二度続けない。
-  let pool=['fan'];if(T>8)pool.push('wall');if(T>14&&!lastHard)pool.push('spin');if(T>20&&!lastHard)pool.push('ring');
-  if(pool.length>1)pool=pool.filter(p=>p!==lastKind);
-  const k=pool[Math.random()*pool.length|0];lastKind=k;lastHard=k==='spin'||k==='ring';
-  if(k==='fan'){
-    const [x,y]=edge(),b=Math.atan2(me.y-y,me.x-x),n=Math.min(13,8+(T/12|0));
-    for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.13,(140+Math.min(T,60))*U,COL.fan);
-  }else if(k==='wall'){
-    const side=Math.random()*4|0,sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+Math.random()*(n-5)|0,v=Math.min(130,90+T*.6)*U,gw=3;
-    for(let i=0;i<n;i++){if(i>=gap&&i<gap+gw)continue;const p=i*sp;
-      if(side===0)shot(p,-14,Math.PI/2,v,COL.wall);else if(side===2)shot(p,H+14,-Math.PI/2,v,COL.wall);
-      else if(side===1)shot(W+14,p,Math.PI,v,COL.wall);else shot(-14,p,0,v,COL.wall);}
-  }else if(k==='spin'){
-    const cx=Math.random()<.5?-10:W+10,cy=Math.random()<.5?-10:H+10,b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
-    emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/24,n:24,iv:.06,t:0});
-  }else{
-    const R=Math.hypot(W,H)*.6,n=24,gap=Math.random()*n|0,cx=me.x,cy=me.y;
-    for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;
-      shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,Math.min(125,95+T*.4)*U,COL.ring);}
-  }
+/* ---------- 難所：型はいくつもあり、どれが来るかは運。越えるたびに凪が来る ---------- */
+const later=(d,f)=>timers.push({t:d,f}), rnd=n=>Math.random()*n|0;
+const toMe=(x,y)=>Math.atan2(me.y-y,me.x-x);
+function fanAt(n,sp){const [x,y]=edge(),b=toMe(x,y);for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.15,sp*U,COL.fan)}
+function wallFrom(side,v){
+  const sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+rnd(n-5);
+  for(let i=0;i<n;i++){if(i>=gap&&i<gap+3)continue;const p=i*sp;
+    if(side===0)shot(p,-14,Math.PI/2,v*U,COL.wall);else if(side===2)shot(p,H+14,-Math.PI/2,v*U,COL.wall);
+    else if(side===1)shot(W+14,p,Math.PI,v*U,COL.wall);else shot(-14,p,0,v*U,COL.wall);}
 }
-
+function ringAt(){
+  const R=Math.hypot(W,H)*.6,n=22,gap=rnd(n),cx=me.x,cy=me.y;
+  for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,92*U,COL.ring)}
+}
+function spinFrom(cx,cy,delay){
+  const b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
+  emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/22,n:22,iv:.07,t:delay||0,sp:132,c:COL.spin});
+}
+const PATTERNS=[
+ {name:'扇',lv:0,run(l){const k=2+Math.min(2,l/3|0);for(let i=0;i<k;i++)later(i*.95,()=>fanAt(Math.min(11,7+(l/3|0)),122));return k*.95+1.4}},
+ {name:'豪雨',lv:0,run(l){const side=rnd(4),n=Math.min(64,34+l*3),b=[Math.PI/2,Math.PI,-Math.PI/2,0][side];
+   for(let i=0;i<n;i++)later(i*4/n,()=>{const q=Math.random();
+     const x=side===0||side===2?q*W:side===1?W+14:-14,y=side===1||side===3?q*H:side===0?-14:H+14;
+     shot(x,y,b+(Math.random()-.5)*.9,(88+Math.random()*55)*U,COL.wall)});return 5.2}},
+ {name:'花火',lv:1,run(l){const k=3+Math.min(2,l/4|0);
+   for(let i=0;i<k;i++)later(i*.75,()=>{const [x,y]=edge(),b=Math.atan2(H/2-y,W/2-x);
+     for(let j=0;j<14;j++)shot(x,y,b+(j/13-.5)*Math.PI*.95,86*U,COL.bloom)});return k*.75+2.6}},
+ {name:'壁',lv:1,run(l){const s=rnd(4),k=l>=5?3:2;for(let i=0;i<k;i++)later(i*1.8,()=>wallFrom((s+i+(i?rnd(2):0))%4,84));return k*1.8+2.2}},
+ {name:'十字砲火',lv:2,run(l){const n=6+Math.min(4,l/3|0);
+   [[-10,-10],[W+10,-10],[W+10,H+10],[-10,H+10]].forEach((c,i)=>emitters.push({x:c[0],y:c[1],aim:true,a:0,da:0,n,iv:.3,t:i*.4,sp:128,c:COL.aim}));
+   return n*.3+1.2+1.8}},
+ {name:'渦',lv:2,run(l){const x=Math.random()<.5?-10:W+10,y=Math.random()<.5?-10:H+10;spinFrom(x,y);
+   if(l>=6)spinFrom(W-x,H-y,.9);return 4.4}},
+ {name:'掃射',lv:3,run(){const sp=27*U,n=Math.ceil(W/sp)+1,g1=1+rnd(n-5),g2=1+rnd(n-5),rev=Math.random()<.5;
+   for(let i=0;i<n;i++){const xi=(rev?n-1-i:i)*sp;
+     if(i<g1||i>=g1+3)later(i*.07,()=>shot(xi,-14,Math.PI/2,118*U,COL.spin));
+     if(i<g2||i>=g2+3)later(n*.07+.7+i*.07,()=>shot(W-xi,H+14,-Math.PI/2,118*U,COL.spin));}
+   return n*.14+.7+2.6}},
+ {name:'輪',lv:3,run(l){ringAt();if(l>=7)later(2.4,ringAt);return l>=7?6.6:4.4}},
+ {name:'挟撃',lv:4,run(){wallFrom(1,66);wallFrom(3,66);return 4.6}}
+];
 function startGame(){
-  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;lastKind='';lastHard=false;shake=0;
+  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
   me.x=W/2;me.y=H*.68;me.trail=[];me.bank=0;me.lx=me.x;btn.classList.remove('on');
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
@@ -163,18 +181,26 @@ function update(dt){
   }
   // 絶え間なく降る狙い弾
   const tx=playing?me.x:W/2,ty=playing?me.y:H*.42;
-  spawnAcc+=dt*(playing?Math.min(36,6+T*.62):2.2);
+  // 難所の合間は弾が減って息がつける。難所の最中は、型の弾が主役になる。
+  if(playing){
+    for(let i=timers.length-1;i>=0;i--){const q=timers[i];q.t-=dt;if(q.t<=0){timers.splice(i,1);q.f()}}
+    if(T>nextEvent){
+      const pool=PATTERNS.filter(p=>p.lv<=level&&p!==lastP),p=pool[rnd(pool.length)];lastP=p;
+      surgeEnd=T+p.run(level);nextEvent=surgeEnd+Math.max(2.2,3.6-level*.1);level++;surgeName=p.name;surgeAt=T;beep(330,.12,.03);
+    }
+  }
+  spawnAcc+=dt*(playing?(T<surgeEnd?.4:1)*Math.min(6.5,2.4+level*.4):2.2);
   while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=Math.random();
     if(!playing)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*1.6,70*U*(.8+Math.random()*.45),COL.aim);
     else{
-      const base=(112+Math.min(T,60)*1.8)*U;
-      if(k<.4)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*.6,base*(.85+Math.random()*.4),COL.aim);           // 自機狙い
-      else if(k<.9)shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*(.6+Math.random()*.75),COL.stray); // 画面を横切る流れ弾
-      else shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*.5,COL.slow,7);                            // 遅くて大きい弾
+      const base=(92+Math.min(level,12)*3.5)*U;
+      if(k<.06)shot(x,y,toMe(x,y)+(Math.random()-.5)*.3,215*U,COL.fast,3.6);                                         // 速い弾は少しだけ
+      else if(k<.4)shot(x,y,toMe(x,y)+(Math.random()-.5)*.6,base*(.9+Math.random()*.3),COL.aim);                      // 自機狙い
+      else if(k<.9)shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*(.65+Math.random()*.6),COL.stray);  // 流れ弾
+      else shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*.5,COL.slow,7);                             // 遅くて大きい弾
     }}
-  if(playing&&T>nextEvent){event();nextEvent=T+Math.max(3.2,5.5-T*.03)}
   for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];e.t-=dt;
-    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.a,150*U,COL.spin);e.a+=e.da;e.n--;e.t+=e.iv}
+    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.aim?toMe(e.x,e.y):e.a,e.sp*U,e.c);e.a+=e.da;e.n--;e.t+=e.iv}
     if(e.n<=0)emitters.splice(i,1)}
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life+=dt;
@@ -210,6 +236,8 @@ function drawGame(){
   }
   g.restore();
   if(state==='play'||state==='dying')txt(T.toFixed(2),W/2,34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
+  if(state==='play'&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
+    txt('難所 '+level+' ─ '+surgeName,W/2,56*U,`${11*U}px ${FD}`,'#8d88a8','center',2*U);g.globalAlpha=1}
   if(state==='title')drawTitle();
 }
 
@@ -449,7 +477,7 @@ addEventListener('keyup',e=>{keys[e.key]=false});
 try{
   const all=RANKS.map(r=>r.k+r.line).join('')+'的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
   document.fonts.load('800 20px "Shippori Mincho"',all);
-  document.fonts.load('16px "DotGothic16"','MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
+  document.fonts.load('16px "DotGothic16"','難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
 
 /* ---------- 終了画面だけを開く入口： #end-2743 → 27.43 秒 ---------- */
