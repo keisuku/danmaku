@@ -100,8 +100,8 @@ function txt(s,x,y,font,col,align,ls,glow,blur){
 /* =====================================================================
    ゲーム本体
    ===================================================================== */
-const COL={aim:'#ff4fd8',fan:'#ffb347',wall:'#45d9ff',ring:'#a98bff',spin:'#5dffb0',me:'#7fe9ff'};
-let state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
+const COL={aim:'#ff4fd8',fan:'#ffb347',wall:'#45d9ff',ring:'#a98bff',spin:'#5dffb0',me:'#7fe9ff',stray:'#8ea2ff',slow:'#ff7a5c'};
+let lastKind='',lastHard=false,state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
 let me={x:0,y:0,trail:[]},spawnAcc=0,nextEvent=0,dieT=0,shake=0;
 const keys={};
 for(let i=0;i<46;i++)stars.push({x:Math.random(),y:Math.random(),s:.2+Math.random()*.8});
@@ -111,28 +111,30 @@ function edge(){const m=14,p=Math.random()*(2*W+2*H);
 function shot(x,y,a,sp,c,r){bullets.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,c,r:(r||4.4)*U,seen:false,life:0,gz:false})}
 
 function event(){
-  const pool=['fan'];if(T>5)pool.push('wall');if(T>9)pool.push('spin');if(T>14)pool.push('ring');
-  const k=pool[Math.random()*pool.length|0];
+  // 難しい動き（渦・輪）は続けて出さない。同じ型も二度続けない。
+  let pool=['fan'];if(T>8)pool.push('wall');if(T>14&&!lastHard)pool.push('spin');if(T>20&&!lastHard)pool.push('ring');
+  if(pool.length>1)pool=pool.filter(p=>p!==lastKind);
+  const k=pool[Math.random()*pool.length|0];lastKind=k;lastHard=k==='spin'||k==='ring';
   if(k==='fan'){
-    const [x,y]=edge(),b=Math.atan2(me.y-y,me.x-x),n=Math.min(17,9+(T/8|0));
-    for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.13,(150+Math.min(T,60)*1.5)*U,COL.fan);
+    const [x,y]=edge(),b=Math.atan2(me.y-y,me.x-x),n=Math.min(13,8+(T/12|0));
+    for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.13,(140+Math.min(T,60))*U,COL.fan);
   }else if(k==='wall'){
-    const side=Math.random()*4|0,sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+Math.random()*(n-5)|0,v=Math.min(160,100+T)*U,gw=T>30?2:3;
+    const side=Math.random()*4|0,sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+Math.random()*(n-5)|0,v=Math.min(130,90+T*.6)*U,gw=3;
     for(let i=0;i<n;i++){if(i>=gap&&i<gap+gw)continue;const p=i*sp;
       if(side===0)shot(p,-14,Math.PI/2,v,COL.wall);else if(side===2)shot(p,H+14,-Math.PI/2,v,COL.wall);
       else if(side===1)shot(W+14,p,Math.PI,v,COL.wall);else shot(-14,p,0,v,COL.wall);}
   }else if(k==='spin'){
     const cx=Math.random()<.5?-10:W+10,cy=Math.random()<.5?-10:H+10,b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
-    emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/32,n:32,iv:.05,t:0});
+    emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/24,n:24,iv:.06,t:0});
   }else{
-    const R=Math.hypot(W,H)*.6,n=28,gap=Math.random()*n|0,cx=me.x,cy=me.y;
+    const R=Math.hypot(W,H)*.6,n=24,gap=Math.random()*n|0,cx=me.x,cy=me.y;
     for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;
-      shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,Math.min(150,105+T*.6)*U,COL.ring);}
+      shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,Math.min(125,95+T*.4)*U,COL.ring);}
   }
 }
 
 function startGame(){
-  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=2;shake=0;
+  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;lastKind='';lastHard=false;shake=0;
   me.x=W/2;me.y=H*.68;me.trail=[];me.bank=0;me.lx=me.x;btn.classList.remove('on');
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
@@ -161,12 +163,18 @@ function update(dt){
   }
   // 絶え間なく降る狙い弾
   const tx=playing?me.x:W/2,ty=playing?me.y:H*.42;
-  spawnAcc+=dt*(playing?Math.min(24,4.5+T*.4):2.2);
-  while(spawnAcc>1){spawnAcc--;const [x,y]=edge();
-    shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*(playing?.7:1.6),(playing?125+Math.min(T,60)*2.7:70)*U*(.8+Math.random()*.45),COL.aim)}
-  if(playing&&T>nextEvent){event();if(T>25)event();if(T>50)event();nextEvent=T+Math.max(.75,2.6-T*.045)}
+  spawnAcc+=dt*(playing?Math.min(36,6+T*.62):2.2);
+  while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=Math.random();
+    if(!playing)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*1.6,70*U*(.8+Math.random()*.45),COL.aim);
+    else{
+      const base=(112+Math.min(T,60)*1.8)*U;
+      if(k<.4)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*.6,base*(.85+Math.random()*.4),COL.aim);           // 自機狙い
+      else if(k<.9)shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*(.6+Math.random()*.75),COL.stray); // 画面を横切る流れ弾
+      else shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*.5,COL.slow,7);                            // 遅くて大きい弾
+    }}
+  if(playing&&T>nextEvent){event();nextEvent=T+Math.max(3.2,5.5-T*.03)}
   for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];e.t-=dt;
-    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.a,175*U,COL.spin);e.a+=e.da;e.n--;e.t+=e.iv}
+    while(e.t<=0&&e.n>0){shot(e.x,e.y,e.a,150*U,COL.spin);e.a+=e.da;e.n--;e.t+=e.iv}
     if(e.n<=0)emitters.splice(i,1)}
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life+=dt;
