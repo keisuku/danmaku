@@ -133,7 +133,7 @@ function event(){
 
 function startGame(){
   state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=5;shake=0;
-  me.x=W/2;me.y=H*.68;me.trail=[];btn.classList.remove('on');
+  me.x=W/2;me.y=H*.68;me.trail=[];me.bank=0;me.lx=me.x;btn.classList.remove('on');
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
 function die(){
@@ -156,6 +156,7 @@ function update(dt){
     const kx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0),ky=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
     if(kx||ky){me.x+=kx*270*U*dt;me.y+=ky*270*U*dt}
     me.x=clamp(me.x,8,W-8);me.y=clamp(me.y,8,H-8);
+    me.bank=lerp(me.bank||0,clamp((me.x-(me.lx===undefined?me.x:me.lx))/dt/(420*U),-1,1),1-Math.pow(.0005,dt));me.lx=me.x;
     me.trail.push(me.x,me.y);if(me.trail.length>20)me.trail.splice(0,2);
   }
   // 絶え間なく降る狙い弾
@@ -190,11 +191,8 @@ function drawGame(){
   g.globalAlpha=1;
   for(const p of sparks){g.globalAlpha=clamp(p.l,0,1);dot(p.c,p.x,p.y,1.6*U)}g.globalAlpha=1;
   if(state==='play'){
-    for(let i=0;i<me.trail.length;i+=2){g.globalAlpha=i/me.trail.length*.35;dot(COL.me,me.trail[i],me.trail[i+1],2.2*U)}
-    g.globalAlpha=1;dot(COL.me,me.x,me.y,3.4*U);
-    g.globalCompositeOperation='source-over';
-    g.save();g.translate(me.x,me.y);g.rotate(Math.PI/4+clock*1.5);g.strokeStyle=rgba('#7fe9ff',.8);g.lineWidth=1.2;
-    const q=7.5*U;g.strokeRect(-q,-q,q*2,q*2);g.restore();
+    for(let i=0;i<me.trail.length;i+=2){g.globalAlpha=i/me.trail.length*.28;dot(COL.me,me.trail[i],me.trail[i+1]+11*U,1.8*U)}
+    g.globalAlpha=1;drawShip();
   }
   g.globalCompositeOperation='source-over';
   if(state==='dying'){ // 被弾の衝撃波
@@ -205,6 +203,41 @@ function drawGame(){
   g.restore();
   if(state==='play'||state==='dying')txt(T.toFixed(2),W/2,34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
   if(state==='title')drawTitle();
+}
+
+/* 自機：機首を上に向けた戦闘機。左右に動くと機体が傾く。当たり判定は中心の白い点だけ。 */
+function poly(p,m){g.beginPath();for(let i=0;i<p.length;i+=2)g[i?'lineTo':'moveTo'](p[i]*m,p[i+1]);g.closePath()}
+function drawShip(){
+  const b=me.bank||0,fl=.75+.25*Math.sin(clock*55)+Math.random()*.15;
+  g.save();g.translate(me.x,me.y);g.rotate(b*.22);g.scale(U*(1-.38*Math.abs(b)),U);
+  // 噴射炎
+  g.globalCompositeOperation='lighter';
+  for(const sx of [-1.7,1.7]){dot('#45d9ff',sx,13,2.2);dot('#7fe9ff',sx,13+4*fl,1.7*fl);dot('#ff4fd8',sx,13+9*fl,1.1*fl)}
+  g.globalCompositeOperation='source-over';
+  g.shadowColor='#45d9ff';g.shadowBlur=10;g.lineJoin='round';
+  for(const m of [1,-1]){
+    // 主翼
+    const wg=g.createLinearGradient(0,0,13*m,0);wg.addColorStop(0,'#bfe9ff');wg.addColorStop(1,'#2f7fd0');
+    g.fillStyle=wg;poly([2,-4, 13,6.5, 13,9.5, 8,8.2, 2.5,8.5],m);g.fill();
+    g.shadowBlur=0;
+    g.strokeStyle='rgba(255,255,255,.75)';g.lineWidth=.7;g.beginPath();g.moveTo(2*m,-4);g.lineTo(13*m,6.5);g.stroke();
+    // 尾翼とカナード
+    g.fillStyle='#3d8fe0';poly([1.8,7, 6.5,12.5, 6.5,14.2, 2,12],m);g.fill();
+    g.fillStyle='#8fd0ff';poly([2,-9.5, 5.6,-5.6, 2.4,-5.8],m);g.fill();
+    // 翼端灯
+    g.fillStyle='#ff4fd8';g.fillRect(m>0?12.2:-13.4,6.6,1.2,2.6);
+  }
+  // 胴体
+  const bg=g.createLinearGradient(-3,0,3,0);bg.addColorStop(0,'#8ebfe6');bg.addColorStop(.45,'#ffffff');bg.addColorStop(1,'#6fa6d6');
+  g.fillStyle=bg;g.beginPath();g.moveTo(0,-17);g.quadraticCurveTo(2.6,-10,3.1,0);g.lineTo(2.6,12);g.lineTo(-2.6,12);g.lineTo(-3.1,0);g.quadraticCurveTo(-2.6,-10,0,-17);g.fill();
+  // 風防
+  g.fillStyle='#0b1f4a';g.beginPath();g.moveTo(0,-11.5);g.quadraticCurveTo(1.7,-8,1.5,-4.2);g.lineTo(-1.5,-4.2);g.quadraticCurveTo(-1.7,-8,0,-11.5);g.fill();
+  g.fillStyle='rgba(127,233,255,.9)';g.beginPath();g.ellipse(-.5,-8.4,.45,1.7,0,0,TAU);g.fill();
+  // ノズル
+  g.fillStyle='#1a2c55';g.fillRect(-2.6,11,1.9,1.8);g.fillRect(.7,11,1.9,1.8);
+  g.restore();
+  // 当たり判定の芯
+  g.globalCompositeOperation='lighter';dot('#ff4fd8',me.x,me.y,1.5*U);g.globalCompositeOperation='source-over';
 }
 
 function drawTitle(){
