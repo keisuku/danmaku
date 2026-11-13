@@ -30,6 +30,20 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
   opacity:0;pointer-events:none;transition:opacity .5s,transform .5s;cursor:pointer}
 #again.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
 #again:active{background:var(--ink);color:var(--void)}
+[hidden]{display:none!important}
+#copy{position:absolute;left:12px;top:44px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
+  background:rgba(5,4,10,.6);border:1px solid var(--line);border-radius:2px;padding:8px 10px;cursor:pointer}
+#recout{position:absolute;left:12px;right:12px;top:80px;height:120px;font:11px/1.4 var(--f-dot);color:var(--ink);
+  background:var(--void);border:1px solid var(--dim);border-radius:2px;padding:8px;user-select:text;-webkit-user-select:text}
+#vp{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;
+  background:rgba(5,4,10,.88);border-bottom:1px solid var(--line);font:13px/1.6 var(--f-dot);user-select:text;-webkit-user-select:text}
+#vp h2{margin:0;font:800 18px/1.3 var(--f-mincho);letter-spacing:.06em}
+#vp textarea{height:110px;font:11px/1.4 var(--f-dot);color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:2px;padding:8px;min-width:0}
+#vp .row{display:flex;gap:10px;flex-wrap:wrap}
+#vp button{font:13px/1 var(--f-dot);letter-spacing:.15em;color:var(--ink);background:transparent;border:1px solid var(--dim);border-radius:2px;padding:10px 16px;cursor:pointer}
+#vout{white-space:pre-line;color:var(--dim)}
+#vout.ok{color:#5dffb0}#vout.ng{color:#ff4f6d}#vout.warn{color:#ffd24a}
+#copy:focus-visible,#vp button:focus-visible,#vp textarea:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
 #again:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
 </style>
 <!--/page-->
@@ -39,6 +53,14 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 <div id="stage">
   <canvas id="c" aria-label="的 MATO：全方向から飛んでくる弾を避け続けるゲーム"></canvas>
   <button id="again" type="button">もう一度</button>
+  <button id="copy" type="button" hidden>最高記録をコピー</button>
+  <textarea id="recout" readonly hidden aria-label="最高記録の文字列"></textarea>
+  <div id="vp" hidden>
+    <h2>的 MATO 記録の照合</h2>
+    <textarea id="rec" placeholder="参加者から届いた記録（MATO1: で始まる文字列）を貼り付けてください"></textarea>
+    <div class="row"><button id="chk" type="button">照合する</button><button id="spd" type="button" hidden>等速で見る</button></div>
+    <div id="vout" role="status"></div>
+  </div>
 </div>
 <script>
 (()=>{
@@ -50,11 +72,11 @@ const FD='"DotGothic16","Hiragino Kaku Gothic ProN","Noto Sans JP",monospace';
 const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
 const eOut=t=>1-Math.pow(1-t,3), eExpo=t=>t>=1?1:1-Math.pow(2,-10*t);
 const calm=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let W=390,H=740,D=1,U=1;
+let W=390,H=740,D=1,U=1,VW=390,VH=740,locked=false; // W,H：弾幕を計算する寸法（プレイ中・再生中は固定）　VW,VH：実際の表示寸法
 function resize(){
-  const r=cv.getBoundingClientRect();W=r.width||390;H=r.height||740;
-  D=Math.min(window.devicePixelRatio||1,2.5);cv.width=Math.round(W*D);cv.height=Math.round(H*D);
-  U=Math.min(W/390,H/740);
+  const r=cv.getBoundingClientRect();VW=r.width||390;VH=r.height||740;
+  D=Math.min(window.devicePixelRatio||1,2.5);cv.width=Math.round(VW*D);cv.height=Math.round(VH*D);
+  if(!locked){W=VW;H=VH;U=Math.min(W/390,H/740)}
 }
 addEventListener('resize',resize);resize();
 
@@ -106,13 +128,16 @@ let me={x:0,y:0,trail:[]},spawnAcc=0,nextEvent=0,dieT=0,shake=0;
 const keys={};
 for(let i=0;i<46;i++)stars.push({x:Math.random(),y:Math.random(),s:.2+Math.random()*.8});
 
-function edge(){const m=14,p=Math.random()*(2*W+2*H);
+/* 弾幕に関わる乱数はすべて種つきの sr() から取る。同じ種と同じ動きなら、同じ弾幕が再現される。 */
+const STEP=1/60;let SR=rng(1),seed=1,tick=0,acc=0,quiet=false,recX=[],recY=[],rp=null;
+const sr=()=>SR();
+function edge(){const m=14,p=sr()*(2*W+2*H);
   return p<W?[p,-m]:p<W+H?[W+m,p-W]:p<2*W+H?[p-W-H,H+m]:[-m,p-2*W-H]}
 function shot(x,y,a,sp,c,r){bullets.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,c,r:(r||4.4)*U,seen:false,life:0,gz:false})}
 
 /* ---------- 難所：型はいくつもあり、どれが来るかは運。越えるたびに凪が来る ---------- */
-const later=(d,f)=>timers.push({t:d,f}), rnd=n=>Math.random()*n|0;
-const toMe=(x,y)=>Math.atan2(me.y-y,me.x-x);
+const later=(d,f)=>timers.push({t:d,f}), rnd=n=>sr()*n|0;
+const toMe=(x,y)=>Math.atan2(me.qy-y,me.qx-x);
 function fanAt(n,sp){const [x,y]=edge(),b=toMe(x,y);for(let i=0;i<n;i++)shot(x,y,b+(i-(n-1)/2)*.15,sp*U,COL.fan)}
 function wallFrom(side,v){
   const sp=30*U,len=side%2?H:W,n=Math.ceil(len/sp)+1,gap=1+rnd(n-5);
@@ -121,19 +146,19 @@ function wallFrom(side,v){
     else if(side===1)shot(W+14,p,Math.PI,v*U,COL.wall);else shot(-14,p,0,v*U,COL.wall);}
 }
 function ringAt(){
-  const R=Math.hypot(W,H)*.6,n=26,gap=rnd(n),cx=me.x,cy=me.y;
+  const R=Math.hypot(W,H)*.6,n=26,gap=rnd(n),cx=me.qx,cy=me.qy;
   for(let i=0;i<n;i++){if((i-gap+n)%n<3)continue;const a=i/n*TAU;shot(cx+Math.cos(a)*R,cy+Math.sin(a)*R,a+Math.PI,104*U,COL.ring)}
 }
 function spinFrom(cx,cy,delay){
-  const b=Math.atan2(H/2-cy,W/2-cx),d=Math.random()<.5?1:-1;
+  const b=Math.atan2(H/2-cy,W/2-cx),d=sr()<.5?1:-1;
   emitters.push({x:cx,y:cy,a:b-d*.75,da:d*1.5/30,n:30,iv:.055,t:delay||0,sp:148,c:COL.spin});
 }
 const PATTERNS=[
  {name:'扇',lv:0,run(l){const k=2+Math.min(2,l/3|0);for(let i=0;i<k;i++)later(i*.95,()=>fanAt(Math.min(15,9+(l/2|0)),138));return k*.95+1.4}},
  {name:'豪雨',lv:0,run(l){const side=rnd(4),n=Math.min(110,56+l*6),b=[Math.PI/2,Math.PI,-Math.PI/2,0][side];
-   for(let i=0;i<n;i++)later(i*4/n,()=>{const q=Math.random();
+   for(let i=0;i<n;i++)later(i*4/n,()=>{const q=sr();
      const x=side===0||side===2?q*W:side===1?W+14:-14,y=side===1||side===3?q*H:side===0?-14:H+14;
-     shot(x,y,b+(Math.random()-.5)*.9,(100+Math.random()*60)*U,COL.wall)});return 5.2}},
+     shot(x,y,b+(sr()-.5)*.9,(100+sr()*60)*U,COL.wall)});return 5.2}},
  {name:'花火',lv:1,run(l){const k=3+Math.min(2,l/4|0);
    for(let i=0;i<k;i++)later(i*.75,()=>{const [x,y]=edge(),b=Math.atan2(H/2-y,W/2-x);
      for(let j=0;j<20;j++)shot(x,y,b+(j/19-.5)*Math.PI*.95,98*U,COL.bloom)});return k*.75+2.6}},
@@ -141,9 +166,9 @@ const PATTERNS=[
  {name:'十字砲火',lv:2,run(l){const n=9+Math.min(5,l/2|0);
    [[-10,-10],[W+10,-10],[W+10,H+10],[-10,H+10]].forEach((c,i)=>emitters.push({x:c[0],y:c[1],aim:true,a:0,da:0,n,iv:.24,t:i*.4,sp:145,c:COL.aim}));
    return n*.24+1.2+1.8}},
- {name:'渦',lv:2,run(l){const x=Math.random()<.5?-10:W+10,y=Math.random()<.5?-10:H+10;spinFrom(x,y);
+ {name:'渦',lv:2,run(l){const x=sr()<.5?-10:W+10,y=sr()<.5?-10:H+10;spinFrom(x,y);
    if(l>=6)spinFrom(W-x,H-y,.9);return 4.4}},
- {name:'掃射',lv:3,run(){const sp=27*U,n=Math.ceil(W/sp)+1,g1=1+rnd(n-5),g2=1+rnd(n-5),rev=Math.random()<.5;
+ {name:'掃射',lv:3,run(){const sp=27*U,n=Math.ceil(W/sp)+1,g1=1+rnd(n-5),g2=1+rnd(n-5),rev=sr()<.5;
    for(let i=0;i<n;i++){const xi=(rev?n-1-i:i)*sp;
      if(i<g1||i>=g1+3)later(i*.07,()=>shot(xi,-14,Math.PI/2,132*U,COL.spin));
      if(i<g2||i>=g2+3)later(n*.07+.7+i*.07,()=>shot(W-xi,H+14,-Math.PI/2,132*U,COL.spin));}
@@ -151,54 +176,41 @@ const PATTERNS=[
  {name:'輪',lv:3,run(l){ringAt();if(l>=7)later(2.4,ringAt);return l>=7?6.6:4.4}},
  {name:'挟撃',lv:4,run(){wallFrom(1,76);wallFrom(3,76);return 4.6}}
 ];
+function today(){const d=new Date(),z=v=>String(v).padStart(2,'0');return`${d.getFullYear()}.${z(d.getMonth()+1)}.${z(d.getDate())}`}
+function resetSim(sd){
+  SR=rng(sd);seed=sd;tick=0;T=0;acc=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
+  me.x=W/2;me.y=H*.68;me.qx=Math.round(me.x*2)/2;me.qy=Math.round(me.y*2)/2;me.trail=[];me.bank=0;me.lx=me.x;
+}
 function startGame(){
-  state='play';T=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
-  me.x=W/2;me.y=H*.68;me.trail=[];me.bank=0;me.lx=me.x;btn.classList.remove('on');
+  locked=false;resize();locked=true;state='play';
+  resetSim((Math.random()*4294967296^Date.now())>>>0); // 種は毎回ちがう。だから弾幕も毎回ちがう。
+  recX=[];recY=[];btn.classList.remove('on');copyBtn.hidden=true;recOut.hidden=true;
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
 function die(){
   state='dying';dieT=0;shake=calm?0:14;noise(.6,.3);beep(220,.5,.12,'sawtooth',30);buzz([40,30,120]);
   for(let i=0;i<34;i++){const a=Math.random()*TAU,s=(60+Math.random()*320)*U;
     sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:1,c:i%2?COL.me:'#ffffff'})}
+  if(Math.floor(tick*STEP*100+1e-6)/100>best())saveRec();
 }
 
-function update(dt){
-  clock+=dt;
-  for(const s of stars){s.y+=dt*.012*s.s;if(s.y>1)s.y-=1}
-  for(let i=sparks.length-1;i>=0;i--){const p=sparks[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.94;p.vy*=.94;p.l-=dt*1.6;if(p.l<=0)sparks.splice(i,1)}
-  shake*=Math.pow(.002,dt);
-  if(state==='dying'){dieT+=dt;if(dieT>.6)End.show(T);return}
-  if(state==='end'){End.te+=dt;return}
-
-  const playing=state==='play';
-  if(playing){
-    T+=dt;
-    const kx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0),ky=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
-    if(kx||ky){me.x+=kx*270*U*dt;me.y+=ky*270*U*dt}
-    me.x=clamp(me.x,8,W-8);me.y=clamp(me.y,8,H-8);
-    me.bank=lerp(me.bank||0,clamp((me.x-(me.lx===undefined?me.x:me.lx))/dt/(420*U),-1,1),1-Math.pow(.0005,dt));me.lx=me.x;
-    me.trail.push(me.x,me.y);if(me.trail.length>20)me.trail.splice(0,2);
-  }
-  // 絶え間なく降る狙い弾
-  const tx=playing?me.x:W/2,ty=playing?me.y:H*.42;
+/* 弾幕を1コマ（1/60秒）進める。自機の位置 me.qx, me.qy だけを入力に取り、当たったら true を返す。
+   margin は照合のときだけ使う、当たり判定のゆとり。 */
+function simStep(margin){
+  tick++;T=tick*STEP;const dt=STEP;
+  for(let i=timers.length-1;i>=0;i--){const q=timers[i];q.t-=dt;if(q.t<=0){timers.splice(i,1);q.f()}}
   // 難所の合間は弾が減って息がつける。難所の最中は、型の弾が主役になる。
-  if(playing){
-    for(let i=timers.length-1;i>=0;i--){const q=timers[i];q.t-=dt;if(q.t<=0){timers.splice(i,1);q.f()}}
-    if(T>nextEvent){
-      const pool=PATTERNS.filter(p=>p.lv<=level&&p!==lastP),p=pool[rnd(pool.length)];lastP=p;
-      surgeEnd=T+p.run(level);nextEvent=surgeEnd+Math.max(2.2,3.6-level*.1);level++;surgeName=p.name;surgeAt=T;beep(330,.12,.03);
-    }
+  if(T>nextEvent){
+    const pool=PATTERNS.filter(p=>p.lv<=level&&p!==lastP),p=pool[rnd(pool.length)];lastP=p;
+    surgeEnd=T+p.run(level);nextEvent=surgeEnd+Math.max(2.2,3.6-level*.1);level++;surgeName=p.name;surgeAt=T;if(!quiet)beep(330,.12,.03);
   }
-  spawnAcc+=dt*(playing?(T<surgeEnd?.5:1)*Math.min(15,5.5+level*.85):2.2);
-  while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=Math.random();
-    if(!playing)shot(x,y,Math.atan2(ty-y,tx-x)+(Math.random()-.5)*1.6,70*U*(.8+Math.random()*.45),COL.aim);
-    else{
-      const base=(108+Math.min(level,12)*4)*U;
-      if(k<.06)shot(x,y,toMe(x,y)+(Math.random()-.5)*.3,235*U,COL.fast,3.6);                                         // 速い弾は少しだけ
-      else if(k<.4)shot(x,y,toMe(x,y)+(Math.random()-.5)*.6,base*(.9+Math.random()*.3),COL.aim);                      // 自機狙い
-      else if(k<.9)shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*(.65+Math.random()*.6),COL.stray);  // 流れ弾
-      else shot(x,y,Math.atan2(Math.random()*H-y,Math.random()*W-x),base*.5,COL.slow,7);                             // 遅くて大きい弾
-    }}
+  spawnAcc+=dt*(T<surgeEnd?.5:1)*Math.min(15,5.5+level*.85);
+  while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=sr(),base=(108+Math.min(level,12)*4)*U;
+    if(k<.06)shot(x,y,toMe(x,y)+(sr()-.5)*.3,235*U,COL.fast,3.6);                          // 速い弾は少しだけ
+    else if(k<.4)shot(x,y,toMe(x,y)+(sr()-.5)*.6,base*(.9+sr()*.3),COL.aim);                // 自機狙い
+    else if(k<.9)shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),base*(.65+sr()*.6),COL.stray);     // 流れ弾
+    else shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),base*.5,COL.slow,7);                       // 遅くて大きい弾
+  }
   for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];e.t-=dt;
     while(e.t<=0&&e.n>0){shot(e.x,e.y,e.aim?toMe(e.x,e.y):e.a,e.sp*U,e.c);e.a+=e.da;e.n--;e.t+=e.iv}
     if(e.n<=0)emitters.splice(i,1)}
@@ -206,13 +218,105 @@ function update(dt){
     const b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life+=dt;
     const inside=b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20;
     if(inside)b.seen=true;else if(b.seen||b.life>14){bullets.splice(i,1);continue}
-    if(playing){
-      const dx=b.x-me.x,dy=b.y-me.y,d2=dx*dx+dy*dy,hit=b.r*.75+2*U;
-      if(d2<hit*hit){die();return}
-      if(!b.gz&&d2<Math.pow(b.r+13*U,2)){b.gz=true;beep(1500,.03,.012);
-        for(let k=0;k<4;k++){const a=Math.random()*TAU;sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*90*U,vy:Math.sin(a)*90*U,l:.6,c:'#ffffff'})}}
-    }
+    const dx=b.x-me.qx,dy=b.y-me.qy,d2=dx*dx+dy*dy,hit=b.r*.75+2*U-margin;
+    if(d2<hit*hit)return true;
+    if(!quiet&&!b.gz&&d2<Math.pow(b.r+13*U,2)){b.gz=true;beep(1500,.03,.012);
+      for(let k=0;k<4;k++){const a=Math.random()*TAU;sparks.push({x:me.qx,y:me.qy,vx:Math.cos(a)*90*U,vy:Math.sin(a)*90*U,l:.6,c:'#ffffff'})}}
   }
+  return false;
+}
+
+/* 画面の1フレームぶん。実時間どおりに進め、弾幕は一定の刻みで計算する。 */
+function update(real){
+  clock+=real;
+  for(const s of stars){s.y+=real*.012*s.s;if(s.y>1)s.y-=1}
+  const damp=Math.pow(.94,real*60);
+  for(let i=sparks.length-1;i>=0;i--){const p=sparks[i];p.x+=p.vx*real;p.y+=p.vy*real;p.vx*=damp;p.vy*=damp;p.l-=real*1.6;if(p.l<=0)sparks.splice(i,1)}
+  shake*=Math.pow(.002,real);
+  if(state==='dying'){dieT+=real;if(dieT>.6){locked=false;End.show(T)}}
+  else if(state==='end')End.te+=real;
+  else if(state==='title'){ // 背景をゆっくり流れる弾
+    spawnAcc+=real*2.2;
+    while(spawnAcc>1){spawnAcc--;const [x,y]=edge();shot(x,y,Math.atan2(H*.42-y,W/2-x)+(Math.random()-.5)*1.6,70*U*(.8+Math.random()*.45),COL.aim)}
+    for(let i=bullets.length-1;i>=0;i--){const b=bullets[i];b.x+=b.vx*real;b.y+=b.vy*real;b.life+=real;
+      const inside=b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20;if(inside)b.seen=true;else if(b.seen||b.life>14)bullets.splice(i,1)}
+  }
+  else if(state==='play'){
+    acc+=real;
+    while(acc>=STEP&&state==='play'){
+      acc-=STEP;
+      const kx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0),ky=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
+      if(kx||ky){me.x=clamp(me.x+kx*270*U*STEP,8,W-8);me.y=clamp(me.y+ky*270*U*STEP,8,H-8)}
+      const qx=Math.round(me.x*2),qy=Math.round(me.y*2);me.qx=qx/2;me.qy=qy/2;recX.push(qx);recY.push(qy); // 動きの記録（0.5px刻み）
+      if(simStep(0))die();
+    }
+    cosmetics(real);
+  }
+  else if(state==='replay'&&rp&&!rp.done){
+    for(let k=0;k<rp.speed&&!rp.done;k++){
+      if(rp.i>=rp.r.n){rp.done=true;break}
+      if(rp.done)break;
+      me.x=me.qx=rp.r.xs[rp.i]/2;me.y=me.qy=rp.r.ys[rp.i]/2;rp.i++;
+      if(simStep(.8*U)){rp.done=rp.dead=true;for(let j=0;j<34;j++){const a=Math.random()*TAU,v=(60+Math.random()*320)*U;
+        sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:1,c:j%2?COL.me:'#ffffff'})}}
+    }
+    if(rp.done)spd.textContent='もう一度見る';
+    cosmetics(real);
+  }
+}
+function cosmetics(real){
+  me.bank=lerp(me.bank||0,clamp((me.x-me.lx)/Math.max(real,.001)/(420*U),-1,1),1-Math.pow(.0005,real));me.lx=me.x;
+  me.trail.push(me.x,me.y);if(me.trail.length>20)me.trail.splice(0,2);
+}
+
+/* =====================================================================
+   プレイの記録と照合
+   記録＝弾幕の種＋画面寸法＋1コマごとの自機の位置。照合では同じ弾幕を計算し直し、
+   その動きで本当に当たらずにいられたかを確かめる。
+   ===================================================================== */
+function packPath(xs,ys,sx,sy){
+  const o=[];let px=sx,py=sy;
+  for(let i=0;i<xs.length;i++){const dx=xs[i]-px,dy=ys[i]-py;px=xs[i];py=ys[i];
+    if(dx>=-7&&dx<=7&&dy>=-7&&dy<=7)o.push((dx+7)<<4|(dy+7));else o.push(255,dx&255,dx>>8&255,dy&255,dy>>8&255)}
+  return new Uint8Array(o);
+}
+function unpackPath(u,n,sx,sy){
+  const xs=new Int32Array(n),ys=new Int32Array(n);let px=sx,py=sy,j=0;
+  for(let i=0;i<n;i++){if(j>=u.length)return null;const b=u[j++];let dx,dy;
+    if(b===255){if(j+4>u.length)return null;dx=(u[j]|u[j+1]<<8)<<16>>16;dy=(u[j+2]|u[j+3]<<8)<<16>>16;j+=4}else{dx=(b>>4)-7;dy=(b&15)-7}
+    px+=dx;py+=dy;xs[i]=px;ys[i]=py}
+  return j===u.length?{xs,ys}:null;
+}
+const pipe=async(u,S)=>new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new S('deflate'))).arrayBuffer());
+const b64e=u=>{let t='';for(let i=0;i<u.length;i+=8192)t+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(t).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const b64d=t=>{const b=atob(t.replace(/-/g,'+').replace(/_/g,'/')),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+const fnv=t=>{let h=0x811c9dc5;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,0x01000193)}return(h>>>0).toString(36)};
+const startPos=()=>[Math.round(W/2*2),Math.round(H*.68*2)];
+async function saveRec(){
+  const sd=seed,w=W,h=H,n=tick,[sx,sy]=startPos(),raw=packPath(recX,recY,sx,sy),day=today().replace(/\./g,'');
+  let body=raw,z=0;
+  try{if(window.CompressionStream){body=await pipe(raw,CompressionStream);z=1}}catch(e){body=raw;z=0}
+  const head=`MATO1:${sd}:${w}:${h}:${n}:${day}:${z}:${b64e(body)}`;
+  try{localStorage.setItem('mato.rec',head+':'+fnv(head))}catch(e){}
+}
+async function parseRec(str){
+  const t=str.replace(/\s+/g,''),k=t.lastIndexOf(':');if(k<0||fnv(t.slice(0,k))!==t.slice(k+1))return null;
+  const f=t.slice(0,k).split(':');if(f.length!==8||f[0]!=='MATO1')return null;
+  const r={seed:+f[1]>>>0,W:+f[2],H:+f[3],n:+f[4]|0,day:f[5]};
+  if(!(r.W>0&&r.H>0&&r.n>0&&r.n<1e6&&/^\d{8}$/.test(r.day)))return null;
+  let u=b64d(f[7]);if(f[6]==='1')u=await pipe(u,DecompressionStream);
+  const sx=Math.round(r.W/2*2),sy=Math.round(r.H*.68*2),p=unpackPath(u,r.n,sx,sy);if(!p)return null;
+  r.xs=p.xs;r.ys=p.ys;r.sx=sx;r.sy=sy;return r;
+}
+function loadRec(r){locked=true;W=r.W;H=r.H;U=Math.min(W/390,H/740);resetSim(r.seed)}
+function checkRec(r){ // 画面に出さずに、最後まで一気に計算する
+  loadRec(r);quiet=true;let hitAt=0,maxMove=0,out=false,px=r.sx/2,py=r.sy/2;
+  for(let i=0;i<r.n;i++){
+    const x=r.xs[i]/2,y=r.ys[i]/2;maxMove=Math.max(maxMove,Math.hypot(x-px,y-py)/U);px=x;py=y;
+    if(x<7.4||x>W-7.4||y<7.4||y>H-7.4)out=true;
+    me.qx=x;me.qy=y;if(simStep(.8*U)){hitAt=i+1;break}
+  }
+  quiet=false;return{hitAt,maxMove,out};
 }
 
 function drawGame(){
@@ -221,10 +325,11 @@ function drawGame(){
   g.save();if(shake>.3)g.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
   g.globalCompositeOperation='lighter';
   if(state==='title')g.globalAlpha=.55;
-  for(const b of bullets)dot(b.c,b.x,b.y,b.r);
+  const live=state==='play'||state==='replay',ex=state==='play'?acc:0; // 刻みの端数ぶんだけ弾を先へ描いて、動きをなめらかにする
+  for(const b of bullets)dot(b.c,b.x+b.vx*ex,b.y+b.vy*ex,b.r);
   g.globalAlpha=1;
   for(const p of sparks){g.globalAlpha=clamp(p.l,0,1);dot(p.c,p.x,p.y,1.6*U)}g.globalAlpha=1;
-  if(state==='play'){
+  if(live&&!(rp&&rp.done&&rp.dead)){
     for(let i=0;i<me.trail.length;i+=2){g.globalAlpha=i/me.trail.length*.28;dot(COL.me,me.trail[i],me.trail[i+1]+6*U,1.1*U)}
     g.globalAlpha=1;drawShip();
   }
@@ -235,8 +340,8 @@ function drawGame(){
     g.fillStyle=rgba('#ffffff',Math.max(0,.75-dieT*4));g.fillRect(-20,-20,W+40,H+40);
   }
   g.restore();
-  if(state==='play'||state==='dying')txt(T.toFixed(2),W/2,34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
-  if(state==='play'&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
+  if(live||state==='dying')txt(T.toFixed(2),W/2,state==='replay'?H-24*U:34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
+  if(live&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
     txt('難所 '+level+' ─ '+surgeName,W/2,56*U,`${11*U}px ${FD}`,'#8d88a8','center',2*U);g.globalAlpha=1}
   if(state==='title')drawTitle();
 }
@@ -338,7 +443,7 @@ const End={
   t:0,te:0,rank:null,idx:0,dots:[],ext:1,cols:[],stars:[],prevBest:0,ticked:0,locked:false,slammed:false,shown:false,
   show(seconds){
     const t=this.t=Math.max(0,Math.floor(seconds*100+1e-6)/100);
-    const d=new Date(),z=v=>String(v).padStart(2,'0');this.date=`${d.getFullYear()}.${z(d.getMonth()+1)}.${z(d.getDate())}`;
+    this.date=today();
     this.code=proof(Math.round(t*100),this.date.replace(/\./g,''));
     this.te=calm?9:0;this.ticked=0;this.locked=this.slammed=this.shown=false;
     this.idx=RANKS.reduce((a,r,i)=>t>=r.min?i:a,0);this.rank=RANKS[this.idx];
@@ -477,7 +582,9 @@ const End={
 
 /* ---------- 入力 ---------- */
 let pid=null,px=0,py=0;
+const copyBtn=document.getElementById('copy'),recOut=document.getElementById('recout');
 cv.addEventListener('pointerdown',e=>{
+  if(state==='verify'||state==='replay')return;
   wake();e.preventDefault();
   if(state==='title'){
     const r=cv.getBoundingClientRect();
@@ -504,13 +611,44 @@ try{
   document.fonts.load('16px "DotGothic16"','認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
 
+/* ---------- 最高記録のコピー（タイトル画面） ---------- */
+const getRec=()=>{try{return localStorage.getItem('mato.rec')||''}catch(e){return''}};
+copyBtn.hidden=!getRec();
+copyBtn.addEventListener('click',async()=>{
+  const t=getRec();if(!t)return;
+  try{await navigator.clipboard.writeText(t);copyBtn.textContent='コピーしました';setTimeout(()=>copyBtn.textContent='最高記録をコピー',2000)}
+  catch(e){recOut.value=t;recOut.hidden=false;recOut.focus();recOut.select();copyBtn.textContent='下の文字列を全選択してコピー'}
+});
+
+/* ---------- 照合の画面： #verify ---------- */
+const vp=document.getElementById('vp'),vout=document.getElementById('vout'),spd=document.getElementById('spd'),recIn=document.getElementById('rec');
+if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;copyBtn.hidden=true}
+document.getElementById('chk').addEventListener('click',async()=>{
+  vout.className='';spd.hidden=true;rp=null;state='verify';bullets=[];
+  let r=null;try{r=await parseRec(recIn.value)}catch(e){}
+  if(!r){vout.className='ng';vout.textContent='記録を読み取れません。貼り付けが途中で切れていないか確かめてください。';return}
+  const c=checkRec(r),sec=Math.floor(r.n*STEP*100+1e-6)/100,day=r.day.slice(0,4)+'.'+r.day.slice(4,6)+'.'+r.day.slice(6);
+  const warn=[];
+  if(r.H/r.W<1.55||r.H/r.W>2.45||r.W<280||r.W>720)warn.push(`画面の寸法が不自然です（${Math.round(r.W)}×${Math.round(r.H)}）`);
+  if(c.maxMove>400)warn.push('一瞬で画面を大きく飛び越えたコマがあります');
+  if(c.out)warn.push('画面の外に出たコマがあります');
+  if(c.hitAt>0&&c.hitAt<r.n){vout.className='ng';
+    vout.textContent=`無効。この動きでは ${(c.hitAt*STEP).toFixed(2)} 秒で被弾します（記録上は ${sec.toFixed(2)} 秒）。`}
+  else if(warn.length){vout.className='warn';vout.textContent=`要注意。${sec.toFixed(2)} 秒まで被弾はありませんが、${warn.join('。')}。`}
+  else{vout.className='ok';
+    vout.textContent=`有効。${sec.toFixed(2)} 秒 ／ ${day} ／ 認証 ${proof(Math.round(sec*100),r.day)}\nスクショの秒数・日付・認証と同じか確かめてください。`}
+  recIn.hidden=true;loadRec(r);rp={r,i:0,speed:4,done:false,dead:false};state='replay';spd.hidden=false;spd.textContent='等速で見る';
+});
+spd.addEventListener('click',()=>{if(!rp)return;
+  if(rp.done){loadRec(rp.r);rp.i=0;rp.done=rp.dead=false}else rp.speed=rp.speed===4?1:4;
+  spd.textContent=rp.speed===4?'等速で見る':'4倍速で見る'});
+
 let last=performance.now();
 function frame(now){
-  // 実時間どおりに進める。処理落ちしても弾は遅くならず、細かい刻みに分けて同じ時間ぶん進む。
   const real=Math.min(.25,Math.max(0,(now-last)/1000));last=now;
-  const steps=Math.max(1,Math.ceil(real/.0167));
-  for(let i=0;i<steps;i++)update(real/steps);
-  g.setTransform(D,0,0,D,0,0);
+  update(real);
+  g.setTransform(1,0,0,1,0,0);g.fillStyle=VOID;g.fillRect(0,0,cv.width,cv.height);
+  const sc=Math.min(VW/W,VH/H);g.setTransform(D*sc,0,0,D*sc,(VW-W*sc)/2*D,(VH-H*sc)/2*D); // 照合の再生は、参加者の画面寸法のまま縮尺して映す
   if(state!=='end'||End.te<.5)drawGame();
   if(state==='end')End.draw();
   requestAnimationFrame(frame);
