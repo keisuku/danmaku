@@ -305,7 +305,7 @@ async function saveRec(){
   let body=raw,z=0;
   try{if(window.CompressionStream){body=await pipe(raw,CompressionStream);z=1}}catch(e){body=raw;z=0}
   const head=`MATO1:${sd}:${w}:${h}:${n}:${day}:${z}:${b64e(body)}`;
-  try{localStorage.setItem('mato.rec',head+':'+fnv(head))}catch(e){}
+  try{localStorage.setItem('mato3.rec',head+':'+fnv(head))}catch(e){}
 }
 async function parseRec(str){
   const t=str.replace(/\s+/g,''),k=t.lastIndexOf(':');if(k<0||fnv(t.slice(0,k))!==t.slice(k+1))return null;
@@ -403,7 +403,7 @@ function drawTitle(){
   txt(sound?'音 ON':'音 OFF',W-18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','right',1);
   const b=best();if(b>0)txt('自己最高 '+b.toFixed(2)+' 秒',18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
 }
-function best(){try{return parseFloat(localStorage.getItem('mato.best'))||0}catch(e){return 0}}
+function best(){try{return parseFloat(localStorage.getItem('mato3.best'))||0}catch(e){return 0}}
 
 /* =====================================================================
    終了画面 ―― 受け取るのは「生き残った秒数」ひとつだけ。
@@ -456,7 +456,7 @@ const End={
     this.te=calm?9:0;this.ticked=0;this.locked=this.slammed=this.shown=false;
     this.idx=RANKS.reduce((a,r,i)=>t>=r.min?i:a,0);this.rank=RANKS[this.idx];
     const P=this.rank.pal;this.cols=[0,1,2,3,4,5].map(i=>i<3?mix(P[0],P[1],i/2.5):mix(P[1],P[2],(i-2)/3));
-    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato.best',t.toFixed(2))}catch(e){}}
+    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato3.best',t.toFixed(2))}catch(e){}}
     // 秒数を種にして、弾幕の紋を組む。長く生きるほど、層が重なり大きく咲く。
     const R=rng(Math.round(t*100)+7),n=[5,6,7,8,9,10,12][R()*7|0];
     const L=clamp(2+Math.floor(Math.log2(1+t)*1.35),2,11),ext=this.ext=.42+.58*(L-2)/9,r0=.25;
@@ -620,7 +620,7 @@ try{
 }catch(e){}
 
 /* ---------- 最高記録のコピー（タイトル画面） ---------- */
-const getRec=()=>{try{return localStorage.getItem('mato.rec')||''}catch(e){return''}};
+const getRec=()=>{try{return localStorage.getItem('mato3.rec')||''}catch(e){return''}};
 copyBtn.hidden=!getRec();
 copyBtn.addEventListener('click',async()=>{
   const t=getRec();if(!t)return;
