@@ -296,17 +296,27 @@ function best(){try{return parseFloat(localStorage.getItem('mato.best'))||0}catc
    終了画面 ―― 受け取るのは「生き残った秒数」ひとつだけ。
    紋も、位も、言葉も、すべてその数字から生まれる。
    ===================================================================== */
-const RANKS=[
- {min:0,  k:'瞬',line:'弾幕はまだ、名乗ってもいなかった。',        pal:['#e8ecff','#8ea2ff','#4254c9']},
- {min:3,  k:'芽',line:'指が、弾の速さを覚えはじめた。',            pal:['#eafff2','#5dffb0','#12a7a0']},
- {min:8,  k:'凌',line:'偶然では、ここまで来られない。',            pal:['#e6fbff','#45d9ff','#2b6bff']},
- {min:15, k:'躱',line:'弾と弾のあいだに、道が見えていた。',        pal:['#e8fbff','#4de1ff','#ff4fd8']},
- {min:25, k:'舞',line:'途中から、あれは踊りだった。',              pal:['#fff0f8','#ff6fb5','#8a5bff']},
- {min:40, k:'幽',line:'当たらないものを、人は幽霊と呼ぶ。',        pal:['#f4efff','#b79bff','#37e6e0']},
- {min:60, k:'鬼',line:'先に息を切らしたのは、弾幕のほうだった。',  pal:['#fff1e0','#ff8a3a','#ff2a4f']},
- {min:90, k:'神',line:'ここから先の景色を、知る者は少ない。',      pal:['#ffffff','#ffe08a','#ffab2e']},
- {min:150,k:'無',line:'もはや弾のほうが、あなたを避けていた。',    pal:['#ffffff','#eaf6ff','#9fd8ff']}
+const RANKS=[ // 十秒ごとに位階がひとつ上がる
+ {min:0,  k:'瞬',name:'刹那ノ塵',      ruby:'ダスト',            line:'弾幕はまだ、名乗ってもいなかった。',        pal:['#e8ecff','#8ea2ff','#4254c9']},
+ {min:10, k:'芽',name:'目覚メシ者',    ruby:'アウェイク',        line:'指が、弾の速さを覚えはじめた。',            pal:['#eafff2','#5dffb0','#12a7a0']},
+ {min:20, k:'凌',name:'凌グ者',        ruby:'サバイバー',        line:'偶然では、ここまで来られない。',            pal:['#e6fbff','#45d9ff','#2b6bff']},
+ {min:30, k:'躱',name:'見切リノ魔眼',  ruby:'インサイト',        line:'弾と弾のあいだに、道が見えていた。',        pal:['#e8fbff','#4de1ff','#ff4fd8']},
+ {min:40, k:'舞',name:'弾雨ノ舞踏者',  ruby:'ダンサー',          line:'途中から、あれは踊りだった。',              pal:['#fff0f8','#ff6fb5','#8a5bff']},
+ {min:50, k:'閃',name:'閃光ノ軌跡',    ruby:'トレイサー',        line:'軌跡だけが、そこに残った。',                pal:['#fffbe0','#fff27a','#ff9d3a']},
+ {min:60, k:'幽',name:'朧ノ幻影',      ruby:'ファントム',        line:'当たらないものを、人は幽霊と呼ぶ。',        pal:['#f4efff','#b79bff','#37e6e0']},
+ {min:70, k:'刃',name:'紙一重ノ刃',    ruby:'エッジ',            line:'紙一重を、千回重ねた。',                    pal:['#ffffff','#cfd8e6','#6f8cff']},
+ {min:80, k:'鬼',name:'修羅',          ruby:'アスラ',            line:'先に息を切らしたのは、弾幕のほうだった。',  pal:['#fff1e0','#ff8a3a','#ff2a4f']},
+ {min:90, k:'魔',name:'魔弾ヲ嗤ウ者',  ruby:'ジョーカー',        line:'弾幕が、はじめて恐怖を覚えた。',            pal:['#f6e6ff','#c04dff','#ff2a6d']},
+ {min:100,k:'王',name:'弾幕ノ王',      ruby:'オーバーロード',    line:'百秒。この空は、もうあなたの領土だ。',      pal:['#fff8dc','#ffd24a','#ff7a1a']},
+ {min:110,k:'冥',name:'冥府ノ渡リ手',  ruby:'カロン',            line:'死線を、散歩道にした。',                    pal:['#e6fff7','#3dffc8','#7a3dff']},
+ {min:120,k:'龍',name:'昇龍',          ruby:'ドラグーン',        line:'昇る先に、もう弾は追いつけない。',          pal:['#f0ffe0','#9dff4a','#12c9a0']},
+ {min:130,k:'天',name:'天衣無縫',      ruby:'セラフ',            line:'縫い目のない軌跡。触れられる場所がない。',  pal:['#ffffff','#bfe8ff','#ffb8f0']},
+ {min:140,k:'神',name:'神域',          ruby:'サンクチュアリ',    line:'ここから先の景色を、知る者は少ない。',      pal:['#ffffff','#ffe08a','#ffab2e']},
+ {min:150,k:'零',name:'絶対回避領域',  ruby:'アブソリュート・ゼロ',line:'被弾という概念が、消えた。',              pal:['#ffffff','#9fe8ff','#3d6bff']},
+ {min:200,k:'虚',name:'虚空ノ観測者',  ruby:'オブザーバー',      line:'弾幕は、あなたを観測できなくなった。',      pal:['#f0e6ff','#8f6bff','#ff4fd8']},
+ {min:300,k:'無',name:'無',            ruby:'ヌル',              line:'もはや弾のほうが、あなたを避けていた。',    pal:['#ffffff','#eaf6ff','#9fd8ff']}
 ];
+const ROMAN=['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ','Ⅸ','Ⅹ','ⅩⅠ','ⅩⅡ','ⅩⅢ','ⅩⅣ','ⅩⅤ','ⅩⅥ','ⅩⅦ','ⅩⅧ'];
 const FONT5={ // 5×7 の点で組む数字
  0:'01110100011001110101110011000101110',1:'00100011000010000100001000010001110',
  2:'01110100010000100010001000100011111',3:'11110000010000101110000010000111110',
@@ -359,7 +369,7 @@ const End={
     g.fillStyle=INK;for(const s of this.stars){g.globalAlpha=A*(.06+s[2]*.3);g.fillRect(s[0]*W,s[1]*H,1.1,1.1)}g.globalAlpha=1;
 
     // ---- 寸法：紋が上、数字が中、言葉が下
-    const cx=W/2,cy=H*.315,Rm=Math.min(W*.47,H*.265),low=cy+Rm,room=H-62-low,V=Math.min(U,room/262);
+    const cx=W/2,cy=H*.315,Rm=Math.min(W*.47,H*.265),low=cy+Rm,room=H-62-low,V=Math.min(U,room/286);
     const gl=g.createRadialGradient(cx,cy,0,cx,cy,Rm*this.ext*1.7);
     gl.addColorStop(0,rgba(P[1],.2*A));gl.addColorStop(.5,rgba(P[2],.09*A));gl.addColorStop(1,rgba(P[2],0));
     g.fillStyle=gl;g.fillRect(0,0,W,H);
@@ -417,7 +427,9 @@ const End={
       txt('自己最高 更新',cx,dy0-7*V,`${10.5*V}px ${FD}`,P[1],'center',3*V);
 
     // ---- 言葉
-    let y=dy0+7*p+40*V,a=fa(2.9);
+    let y=dy0+7*p+30*V,a=fa(2.75);
+    g.globalAlpha=a;txt(`第${ROMAN[this.idx]}位階 ─ ${rk.name}〈${rk.ruby}〉`,cx,y,`800 ${12.5*V}px ${FJ}`,P[1],'center',2*V,P[1],8);
+    y+=32*V;a=fa(2.95);
     g.globalAlpha=a;txt(rk.line,cx,y-(1-eOut(a))*6,`800 ${Math.min(17.5*V,W*.82/rk.line.length)}px ${FJ}`,INK,'center',1.5*V,P[1],14);
     const moon=Math.floor(t/1.2822);
     const cosmic=t>=499?'太陽の光が地球に届くより長く、無傷でいた。':moon<1?'光が月に届くより、短い一生だった。':`光なら月まで ${moon.toLocaleString('ja-JP')} 回届く時間を、無傷で生きた。`;
@@ -428,12 +440,13 @@ const End={
 
     // ---- 位の階（まだ届いていない位は、伏せてある）
     y+=34*V;a=fa(3.75);
+    const sp=Math.min(24*V,W*.88/RANKS.length);
     for(let i=0;i<RANKS.length;i++){
-      const x=cx+(i-4)*27*V;g.globalAlpha=a;
-      if(i===this.idx){g.strokeStyle=rgba(P[1],.9);g.lineWidth=1;g.strokeRect(x-11*V,y-15.5*V,22*V,22*V);
-        txt(RANKS[i].k,x,y,`800 ${14*V}px ${FJ}`,'#ffffff','center',0,P[1],10)}
-      else if(i<this.idx)txt(RANKS[i].k,x,y,`800 ${13*V}px ${FJ}`,rgba('#f3f0ff',.38),'center',0);
-      else{g.fillStyle=rgba('#f3f0ff',.28);g.beginPath();g.arc(x,y-5*V,1.4*V,0,TAU);g.fill()}
+      const x=cx+(i-(RANKS.length-1)/2)*sp;g.globalAlpha=a;
+      if(i===this.idx){g.strokeStyle=rgba(P[1],.9);g.lineWidth=1;g.strokeRect(x-sp*.46,y-sp*.66,sp*.92,sp*.92);
+        txt(RANKS[i].k,x,y,`800 ${sp*.62}px ${FJ}`,'#ffffff','center',0,P[1],10)}
+      else if(i<this.idx)txt(RANKS[i].k,x,y,`800 ${sp*.58}px ${FJ}`,rgba('#f3f0ff',.38),'center',0);
+      else{g.fillStyle=rgba('#f3f0ff',.28);g.beginPath();g.arc(x,y-sp*.22,1.2*V,0,TAU);g.fill()}
     }
     y+=25*V;g.globalAlpha=fa(3.95);
     const nx=RANKS[this.idx+1];
@@ -475,7 +488,7 @@ addEventListener('keyup',e=>{keys[e.key]=false});
 
 /* ---------- 書体の先読み（届かなければ端末の明朝・ゴシックで描く） ---------- */
 try{
-  const all=RANKS.map(r=>r.k+r.line).join('')+'的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
+  const all=RANKS.map(r=>r.k+r.line+r.name+r.ruby).join('')+ROMAN.join('')+'第位階─〈〉的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
   document.fonts.load('800 20px "Shippori Mincho"',all);
   document.fonts.load('16px "DotGothic16"','難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
