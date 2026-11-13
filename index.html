@@ -67,7 +67,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
   <textarea id="recout" readonly hidden aria-label="最高記録の文字列"></textarea>
   <div id="vp" hidden>
     <h2>的 MATO 記録の照合</h2>
-    <textarea id="rec" placeholder="参加者から届いた記録（MATO1: で始まる文字列）を貼り付けてください"></textarea>
+    <textarea id="rec" placeholder="参加者から届いた記録（MATO2: で始まる文字列）を貼り付けてください"></textarea>
     <div class="row"><button id="chk" type="button">照合する</button><button id="spd" type="button" hidden>等速で見る</button></div>
     <div id="vbig" hidden></div>
     <div id="vout" role="status"></div>
@@ -134,6 +134,15 @@ function txt(s,x,y,font,col,align,ls,glow,blur){
    ゲーム本体
    ===================================================================== */
 const COL={aim:'#ff4fd8',fan:'#ffb347',wall:'#45d9ff',ring:'#a98bff',spin:'#5dffb0',me:'#7fe9ff',stray:'#8ea2ff',slow:'#ff7a5c',fast:'#fff27a',bloom:'#ff9de0'};
+/* 空模様：その回の弾幕の性格。5種類あり、続けて同じものは出ない。 */
+const STYLES=[
+ {name:'驟雨',rate:1,   spd:1,   aim:.34,fast:.06,slow:.1, stray:'#8ea2ff',fav:[]},                       // ばらけた弾が全方向から
+ {name:'狙撃',rate:.7,  spd:1.08,aim:.7, fast:.14,slow:.04,stray:'#ff9aa8',fav:['扇','十字砲火']},        // 数は少ないが、ほとんどが自機狙い
+ {name:'濃霧',rate:.95, spd:.72, aim:.22,fast:.02,slow:.28,stray:'#c3ccdc',fav:['花火','輪']},            // 遅い弾が居座って道をふさぐ
+ {name:'奔流',rate:1.3, spd:1,   aim:.18,fast:.05,slow:.07,stray:'#5fe0ff',fav:['豪雨','掃射','壁'],flow:true}, // 一方向からの流れ
+ {name:'脈動',rate:1.1, spd:1,   aim:.34,fast:.06,slow:.1, stray:'#c79bff',fav:['渦','挟撃','花火'],pulse:true}  // 押し寄せては引く
+];
+let style=STYLES[0],flowBase=0,lastStyle=-1;
 let timers=[],level=0,lastP=null,surgeEnd=0,surgeName='',surgeAt=-9,state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
 let me={x:0,y:0,trail:[]},spawnAcc=0,nextEvent=0,dieT=0,shake=0;
 const keys={};
@@ -189,12 +198,13 @@ const PATTERNS=[
 ];
 function today(){const d=new Date(),z=v=>String(v).padStart(2,'0');return`${d.getFullYear()}.${z(d.getMonth()+1)}.${z(d.getDate())}`}
 function resetSim(sd){
-  SR=rng(sd);seed=sd;tick=0;T=0;acc=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
+  SR=rng(sd);seed=sd;style=STYLES[sd%5];flowBase=sr()*TAU;tick=0;T=0;acc=0;bullets=[];sparks=[];emitters=[];spawnAcc=0;nextEvent=4;timers=[];level=0;lastP=null;surgeEnd=0;surgeAt=-9;shake=0;
   me.x=W/2;me.y=H*.68;me.qx=Math.round(me.x*2)/2;me.qy=Math.round(me.y*2)/2;me.trail=[];me.bank=0;me.lx=me.x;
 }
 function startGame(){
   locked=false;resize();locked=true;state='play';
-  resetSim((Math.random()*4294967296^Date.now())>>>0); // 種は毎回ちがう。だから弾幕も毎回ちがう。
+  let sd;do{sd=(Math.random()*4294967296^Date.now())>>>0}while(sd%5===lastStyle);lastStyle=sd%5; // 種は毎回ちがう。空模様は種で決まり、前回と同じものは避ける。
+  resetSim(sd);
   recX=[];recY=[];btn.classList.remove('on');copyBtn.hidden=true;recOut.hidden=true;
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
@@ -212,15 +222,21 @@ function simStep(margin){
   for(let i=timers.length-1;i>=0;i--){const q=timers[i];q.t-=dt;if(q.t<=0){timers.splice(i,1);q.f()}}
   // 難所の合間は弾が減って息がつける。難所の最中は、型の弾が主役になる。
   if(T>nextEvent){
-    const pool=PATTERNS.filter(p=>p.lv<=level&&p!==lastP),p=pool[rnd(pool.length)];lastP=p;
+    const pool=[];for(const q of PATTERNS){const fv=style.fav.includes(q.name);if(q===lastP||q.lv-(fv?2:0)>level)continue;pool.push(q);if(fv)pool.push(q,q)} // 空模様ごとに、出やすい型がちがう
+    const p=pool[rnd(pool.length)];lastP=p;
     surgeEnd=T+p.run(level);nextEvent=surgeEnd+Math.max(2.2,3.6-level*.1);level++;surgeName=p.name;surgeAt=T;if(!quiet)beep(330,.12,.03);
   }
-  spawnAcc+=dt*(T<surgeEnd?.5:1)*Math.min(15,5.5+level*.85);
-  while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=sr(),base=(108+Math.min(level,12)*4)*U;
-    if(k<.06)shot(x,y,toMe(x,y)+(sr()-.5)*.3,235*U,COL.fast,3.6);                          // 速い弾は少しだけ
-    else if(k<.4)shot(x,y,toMe(x,y)+(sr()-.5)*.6,base*(.9+sr()*.3),COL.aim);                // 自機狙い
-    else if(k<.9)shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),base*(.65+sr()*.6),COL.stray);     // 流れ弾
-    else shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),base*.5,COL.slow,7);                       // 遅くて大きい弾
+  // 絶え間なく降る弾。量・速さ・狙いの割合は、その回の空模様で変わる。
+  const st=style,wave=st.pulse?(T%3.2<1.6?1.9:.25):1;
+  spawnAcc+=dt*(T<surgeEnd?.5:1)*Math.min(15,5.5+level*.85)*st.rate*wave;
+  while(spawnAcc>1){spawnAcc--;const [x,y]=edge(),k=sr(),lv=108+Math.min(level,12)*4,base=lv*U*st.spd;
+    if(k<st.fast)shot(x,y,toMe(x,y)+(sr()-.5)*.3,235*U,COL.fast,3.6);                                  // 速い弾
+    else if(k<st.fast+st.aim)shot(x,y,toMe(x,y)+(sr()-.5)*.6,base*(.9+sr()*.3),COL.aim);                // 自機狙い
+    else if(k<1-st.slow){                                                                               // 流れ弾
+      if(st.flow){const a=flowBase+T*.1,d=Math.hypot(W,H),o=(sr()-.5)*d*.85;                                // 奔流：一方向から押し寄せ、向きがゆっくり回る
+        shot(W/2-Math.cos(a)*(d*.55+14)-Math.sin(a)*o,H/2-Math.sin(a)*(d*.55+14)+Math.cos(a)*o,a+(sr()-.5)*.5,base*(.7+sr()*.6),st.stray)}
+      else shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),base*(.65+sr()*.6),st.stray)}
+    else shot(x,y,Math.atan2(sr()*H-y,sr()*W-x),lv*U*.5,COL.slow,7);                                    // 遅くて大きい弾
   }
   for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];e.t-=dt;
     while(e.t<=0&&e.n>0){shot(e.x,e.y,e.aim?toMe(e.x,e.y):e.a,e.sp*U,e.c);e.a+=e.da;e.n--;e.t+=e.iv}
@@ -307,12 +323,12 @@ async function saveRec(){
   const sd=seed,w=W,h=H,n=tick,[sx,sy]=startPos(),raw=packPath(recX,recY,sx,sy),day=today().replace(/\./g,'');
   let body=raw,z=0;
   try{if(window.CompressionStream){body=await pipe(raw,CompressionStream);z=1}}catch(e){body=raw;z=0}
-  const head=`MATO1:${sd}:${w}:${h}:${n}:${day}:${z}:${b64e(body)}`;
-  try{localStorage.setItem('mato3.rec',head+':'+fnv(head))}catch(e){}
+  const head=`MATO2:${sd}:${w}:${h}:${n}:${day}:${z}:${b64e(body)}`;
+  try{localStorage.setItem('mato4.rec',head+':'+fnv(head))}catch(e){}
 }
 async function parseRec(str){
   const t=str.replace(/\s+/g,''),k=t.lastIndexOf(':');if(k<0||fnv(t.slice(0,k))!==t.slice(k+1))return null;
-  const f=t.slice(0,k).split(':');if(f.length!==8||f[0]!=='MATO1')return null;
+  const f=t.slice(0,k).split(':');if(f.length!==8||f[0]!=='MATO2')return null;
   const r={seed:+f[1]>>>0,W:+f[2],H:+f[3],n:+f[4]|0,day:f[5]};
   if(!(r.W>0&&r.H>0&&r.n>0&&r.n<1e6&&/^\d{8}$/.test(r.day)))return null;
   let u=b64d(f[7]);if(f[6]==='1')u=await pipe(u,DecompressionStream);
@@ -352,6 +368,8 @@ function drawGame(){
   }
   g.restore();
   if(live||state==='dying')txt(T.toFixed(2),W/2,state==='replay'?H-24*U:34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
+  if(live&&T<2.8){g.globalAlpha=clamp((2.8-T)*2,0,1)*clamp(T*3,0,1);
+    txt('空模様 ─ '+style.name,W/2,58*U,`${13*U}px ${FD}`,style.stray,'center',3*U);g.globalAlpha=1}
   if(live&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
     txt('難所 '+level+' ─ '+surgeName,W/2,56*U,`${11*U}px ${FD}`,'#8d88a8','center',2*U);g.globalAlpha=1}
   if(state==='title')drawTitle();
@@ -406,7 +424,7 @@ function drawTitle(){
   txt(sound?'音 ON':'音 OFF',W-18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','right',1);
   const b=best();if(b>0)txt('自己最高 '+b.toFixed(2)+' 秒',18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
 }
-function best(){try{return parseFloat(localStorage.getItem('mato3.best'))||0}catch(e){return 0}}
+function best(){try{return parseFloat(localStorage.getItem('mato4.best'))||0}catch(e){return 0}}
 
 /* =====================================================================
    終了画面 ―― 受け取るのは「生き残った秒数」ひとつだけ。
@@ -459,7 +477,7 @@ const End={
     this.te=calm?9:0;this.ticked=0;this.locked=this.slammed=this.shown=false;
     this.idx=RANKS.reduce((a,r,i)=>t>=r.min?i:a,0);this.rank=RANKS[this.idx];
     const P=this.rank.pal;this.cols=[0,1,2,3,4,5].map(i=>i<3?mix(P[0],P[1],i/2.5):mix(P[1],P[2],(i-2)/3));
-    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato3.best',t.toFixed(2))}catch(e){}}
+    this.prevBest=best();if(t>this.prevBest){try{localStorage.setItem('mato4.best',t.toFixed(2))}catch(e){}}
     // 秒数を種にして、弾幕の紋を組む。長く生きるほど、層が重なり大きく咲く。
     const R=rng(Math.round(t*100)+7),n=[5,6,7,8,9,10,12][R()*7|0];
     const L=clamp(2+Math.floor(Math.log2(1+t)*1.35),2,11),ext=this.ext=.42+.58*(L-2)/9,r0=.25;
@@ -619,11 +637,11 @@ addEventListener('keyup',e=>{keys[e.key]=false});
 try{
   const all=RANKS.map(r=>r.k+r.line+r.name+r.ruby).join('')+ROMAN.join('')+'第位階─〈〉的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
   document.fonts.load('800 20px "Shippori Mincho"',all);
-  document.fonts.load('16px "DotGothic16"','認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
+  document.fonts.load('16px "DotGothic16"','空模様驟雨狙撃濃霧奔流脈動認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
 
 /* ---------- 最高記録のコピー（タイトル画面） ---------- */
-const getRec=()=>{try{return localStorage.getItem('mato3.rec')||''}catch(e){return''}};
+const getRec=()=>{try{return localStorage.getItem('mato4.rec')||''}catch(e){return''}};
 copyBtn.hidden=!getRec();
 const copy2=document.getElementById('copy2');
 for(const el of [copyBtn,copy2])el.addEventListener('click',async()=>{
