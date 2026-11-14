@@ -24,19 +24,25 @@ html{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 @supports (height:1dvh){#stage{width:min(100%,62dvh)}}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-#bar{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:center;gap:10px;pointer-events:none} /* 帯そのものは指を素通しする。受け取るのは表示中のボタンだけ */
-#again,#copy2{font:15px/1 var(--f-dot);letter-spacing:.35em;text-indent:.35em;color:var(--ink);
-  background:rgba(5,4,10,.6);border:1px solid var(--dim);border-radius:2px;padding:13px 26px;
+#bar{position:absolute;left:12px;right:12px;bottom:12px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none} /* 帯そのものは指を素通しする。受け取るのは表示中のボタンだけ */
+#again,#sub button{font:15px/1 var(--f-dot);letter-spacing:.35em;text-indent:.35em;color:var(--ink);
+  background:rgba(5,4,10,.6);border:1px solid var(--dim);border-radius:2px;padding:13px 30px;
   opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .5s,transform .5s;cursor:pointer}
-#copy2{font-size:12px;letter-spacing:.08em;text-indent:0;padding:13px 14px;border-color:var(--line);color:var(--dim)}
-#again.on,#again.on~#copy2{opacity:1;pointer-events:auto;transform:none}
-#copy2:active{background:var(--ink);color:var(--void)}
-#copy2:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+#sub{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#sub button{font-size:11.5px;letter-spacing:.05em;text-indent:0;padding:10px 10px;border-color:var(--line);color:var(--dim)}
+#again.on,#again.on~#sub button{opacity:1;pointer-events:auto;transform:none}
+#sub button:active,#rbar button:active{background:var(--ink);color:var(--void)}
+#sub button:focus-visible,#rbar button:focus-visible,#watch:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+#rbar{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:center;gap:10px;pointer-events:none}
+#rbar button{pointer-events:auto;font:13px/1 var(--f-dot);letter-spacing:.12em;color:var(--ink);background:rgba(5,4,10,.7);
+  border:1px solid var(--dim);border-radius:2px;padding:12px 16px;cursor:pointer}
+#watch{position:absolute;left:12px;top:80px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
+  background:rgba(5,4,10,.6);border:1px solid var(--line);border-radius:2px;padding:8px 10px;cursor:pointer}
 #again:active{background:var(--ink);color:var(--void)}
 [hidden]{display:none!important}
 #copy{position:absolute;left:12px;top:44px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
   background:rgba(5,4,10,.6);border:1px solid var(--line);border-radius:2px;padding:8px 10px;cursor:pointer}
-#recout{position:absolute;left:12px;right:12px;top:80px;height:120px;font:11px/1.4 var(--f-dot);color:var(--ink);
+#recout{position:absolute;left:12px;right:12px;top:116px;height:120px;font:11px/1.4 var(--f-dot);color:var(--ink);
   background:var(--void);border:1px solid var(--dim);border-radius:2px;padding:8px;user-select:text;-webkit-user-select:text}
 #vp{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;
   background:rgba(5,4,10,.88);border-bottom:1px solid var(--line);font:13px/1.6 var(--f-dot);user-select:text;-webkit-user-select:text}
@@ -62,7 +68,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 <!--page-->
 <div id="stage">
   <canvas id="c" aria-label="的 MATO：全方向から飛んでくる弾を避け続けるゲーム"></canvas>
-  <div id="bar"><button id="again" type="button">もう一度</button><button id="copy2" type="button" hidden>最高記録をコピー</button></div>
+  <div id="bar"><button id="again" type="button">もう一度</button>
+    <div id="sub"><button id="watch2" type="button" hidden>最高記録をリプレイ</button><button id="copy2" type="button" hidden>記録をコピー</button><button id="home" type="button">ホーム</button></div></div>
+  <div id="rbar" hidden><button id="rspd" type="button">4倍速で見る</button><button id="rhome" type="button">ホーム</button></div>
+  <button id="watch" type="button" hidden>最高記録をリプレイ</button>
   <button id="copy" type="button" hidden>最高記録をコピー</button>
   <textarea id="recout" readonly hidden aria-label="最高記録の文字列"></textarea>
   <div id="vp" hidden>
@@ -205,7 +214,7 @@ function startGame(){
   locked=false;resize();locked=true;state='play';
   let sd;do{sd=(Math.random()*4294967296^Date.now())>>>0}while(sd%5===lastStyle);lastStyle=sd%5; // 種は毎回ちがう。空模様は種で決まり、前回と同じものは避ける。
   resetSim(sd);
-  recX=[];recY=[];btn.classList.remove('on');copyBtn.hidden=true;recOut.hidden=true;
+  recX=[];recY=[];btn.classList.remove('on');copyBtn.hidden=watchBtn.hidden=true;recOut.hidden=true;rbar.hidden=true;rp=null;
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
 function die(){
@@ -281,15 +290,18 @@ function update(real){
   }
   else if(state==='replay'&&rp&&!rp.done){
     for(let k=0;k<rp.speed&&!rp.done;k++){
-      if(rp.i>=rp.r.n){rp.done=true;break}
-      if(rp.done)break;
+      if(rp.i>=rp.r.n){endReplay();break}
       me.x=me.qx=rp.r.xs[rp.i]/2;me.y=me.qy=rp.r.ys[rp.i]/2;rp.i++;
-      if(simStep(.8*U)){rp.done=rp.dead=true;for(let j=0;j<34;j++){const a=Math.random()*TAU,v=(60+Math.random()*320)*U;
-        sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:1,c:j%2?COL.me:'#ffffff'})}}
+      if(simStep(.8*U))endReplay();
     }
-    if(rp.done)spd.textContent='もう一度見る';
     cosmetics(real);
   }
+}
+function endReplay(){ // 記録の最後＝被弾の瞬間
+  rp.done=rp.dead=true;spd.textContent=rspd.textContent='もう一度見る';
+  if(rp.game){noise(.6,.3);beep(220,.5,.12,'sawtooth',30);if(!calm)shake=14}
+  for(let j=0;j<34;j++){const a=Math.random()*TAU,v=(60+Math.random()*320)*U;
+    sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:1,c:j%2?COL.me:'#ffffff'})}
 }
 function cosmetics(real){
   me.bank=lerp(me.bank||0,clamp((me.x-me.lx)/Math.max(real,.001)/(420*U),-1,1),1-Math.pow(.0005,real));me.lx=me.x;
@@ -367,9 +379,10 @@ function drawGame(){
     g.fillStyle=rgba('#ffffff',Math.max(0,.75-dieT*4));g.fillRect(-20,-20,W+40,H+40);
   }
   g.restore();
-  if(live||state==='dying')txt(T.toFixed(2),W/2,state==='replay'?H-24*U:34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
+  if(live||state==='dying')txt(T.toFixed(2),W/2,state==='replay'&&!rp.game?H-24*U:34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
   if(live&&T<2.8){g.globalAlpha=clamp((2.8-T)*2,0,1)*clamp(T*3,0,1);
     txt('空模様 ─ '+style.name,W/2,58*U,`${13*U}px ${FD}`,style.stray,'center',3*U);g.globalAlpha=1}
+  if(state==='replay'&&rp.game&&(rp.done||Math.sin(clock*4)>-.4))txt('最高記録のリプレイ',18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
   if(live&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
     txt('難所 '+level+' ─ '+surgeName,W/2,56*U,`${11*U}px ${FD}`,'#8d88a8','center',2*U);g.globalAlpha=1}
   if(state==='title')drawTitle();
@@ -506,7 +519,7 @@ const End={
     // ---- 進行に合わせた一度きりの合図
     if(!this.locked&&te>=2.05){this.locked=true;beep(660,.25,.05);beep(990,.35,.04);buzz(20)}
     if(!this.slammed&&te>=2.45){this.slammed=true;beep(110,.5,.22,'sine',38);noise(.25,.16);buzz(60);if(!calm&&te<3)shake=9}
-    if(!this.shown&&te>=4.1){this.shown=true;document.getElementById('copy2').hidden=!getRec();btn.classList.add('on')}
+    if(!this.shown&&te>=4.1){this.shown=true;copy2.hidden=watch2.hidden=!getRec();btn.classList.add('on')}
     // ---- 地
     g.fillStyle=rgba('#05040a',fa(0,.45));g.fillRect(0,0,W,H);
     const A=fa(.2,.6);
@@ -514,7 +527,7 @@ const End={
     g.fillStyle=INK;for(const s of this.stars){g.globalAlpha=A*(.06+s[2]*.3);g.fillRect(s[0]*W,s[1]*H,1.1,1.1)}g.globalAlpha=1;
 
     // ---- 寸法：紋が上、数字が中、言葉が下
-    const cx=W/2,cy=H*.315,Rm=Math.min(W*.47,H*.265),low=cy+Rm,room=H-62-low,V=Math.min(U,room/286);
+    const cx=W/2,cy=H*.315,Rm=Math.min(W*.47,H*.265),low=cy+Rm,room=H-100-low,V=Math.min(U,room/286);
     const gl=g.createRadialGradient(cx,cy,0,cx,cy,Rm*this.ext*1.7);
     gl.addColorStop(0,rgba(P[1],.2*A));gl.addColorStop(.5,rgba(P[2],.09*A));gl.addColorStop(1,rgba(P[2],0));
     g.fillStyle=gl;g.fillRect(0,0,W,H);
@@ -637,22 +650,37 @@ addEventListener('keyup',e=>{keys[e.key]=false});
 try{
   const all=RANKS.map(r=>r.k+r.line+r.name+r.ruby).join('')+ROMAN.join('')+'第位階─〈〉的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
   document.fonts.load('800 20px "Shippori Mincho"',all);
-  document.fonts.load('16px "DotGothic16"','空模様驟雨狙撃濃霧奔流脈動認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
+  document.fonts.load('16px "DotGothic16"','最高記録のリプレイ空模様驟雨狙撃濃霧奔流脈動認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
 
 /* ---------- 最高記録のコピー（タイトル画面） ---------- */
 const getRec=()=>{try{return localStorage.getItem('mato4.rec')||''}catch(e){return''}};
-copyBtn.hidden=!getRec();
-const copy2=document.getElementById('copy2');
+const $=i=>document.getElementById(i),copy2=$('copy2'),watch2=$('watch2'),watchBtn=$('watch'),rbar=$('rbar'),rspd=$('rspd');
+copyBtn.hidden=watchBtn.hidden=!getRec();
+/* 最高記録のリプレイ：保存してある種と動きから、そのプレイをもう一度計算して映す */
+async function watchBest(){
+  const t=getRec();if(!t)return;let r=null;try{r=await parseRec(t)}catch(e){}if(!r)return;
+  wake();btn.classList.remove('on');copyBtn.hidden=watchBtn.hidden=true;recOut.hidden=true;sparks=[];
+  loadRec(r);rp={r,i:0,speed:1,done:false,dead:false,game:true};state='replay';rbar.hidden=false;rspd.textContent='4倍速で見る';
+}
+function goHome(){
+  rp=null;state='title';locked=false;resize();bullets=[];sparks=[];emitters=[];timers=[];spawnAcc=0;shake=0;
+  btn.classList.remove('on');rbar.hidden=true;recOut.hidden=true;copyBtn.textContent='最高記録をコピー';copyBtn.hidden=watchBtn.hidden=!getRec();
+}
+function replaySpeed(){if(!rp)return;
+  if(rp.done){loadRec(rp.r);sparks=[];rp.i=0;rp.done=rp.dead=false}else rp.speed=rp.speed===4?1:4;
+  spd.textContent=rspd.textContent=rp.speed===4?'等速で見る':'4倍速で見る'}
+watchBtn.addEventListener('click',watchBest);watch2.addEventListener('click',watchBest);
+$('home').addEventListener('click',goHome);$('rhome').addEventListener('click',goHome);rspd.addEventListener('click',replaySpeed);
 for(const el of [copyBtn,copy2])el.addEventListener('click',async()=>{
   const t=getRec();if(!t)return;
-  try{await navigator.clipboard.writeText(t);el.textContent='コピーしました';setTimeout(()=>el.textContent='最高記録をコピー',2000)}
+  try{await navigator.clipboard.writeText(t);const was=el.textContent;el.textContent='コピーしました';setTimeout(()=>el.textContent=was,2000)}
   catch(e){recOut.value=t;recOut.hidden=false;recOut.focus();recOut.select();el.textContent='上の文字列を全選択してコピー'}
 });
 
 /* ---------- 照合の画面： #verify ---------- */
 const vp=document.getElementById('vp'),vout=document.getElementById('vout'),spd=document.getElementById('spd'),recIn=document.getElementById('rec');
-if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;copyBtn.hidden=true}
+if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;copyBtn.hidden=watchBtn.hidden=true}
 document.getElementById('chk').addEventListener('click',async()=>{
   wake();vout.className='';spd.hidden=true;rp=null;state='verify';bullets=[];
   const big=document.getElementById('vbig'),say=(cls,head)=>{big.hidden=false;big.className=cls;big.textContent=head;vp.className=cls;
@@ -672,9 +700,7 @@ document.getElementById('chk').addEventListener('click',async()=>{
     vout.textContent=`有効。${sec.toFixed(2)} 秒 ／ ${day} ／ 認証 ${proof(Math.round(sec*100),r.day)}\nスクショの秒数・日付・認証と同じか確かめてください。`}
   recIn.hidden=true;loadRec(r);rp={r,i:0,speed:4,done:false,dead:false};state='replay';spd.hidden=false;spd.textContent='等速で見る';
 });
-spd.addEventListener('click',()=>{if(!rp)return;
-  if(rp.done){loadRec(rp.r);rp.i=0;rp.done=rp.dead=false}else rp.speed=rp.speed===4?1:4;
-  spd.textContent=rp.speed===4?'等速で見る':'4倍速で見る'});
+spd.addEventListener('click',replaySpeed);
 
 let last=performance.now();
 function frame(now){
