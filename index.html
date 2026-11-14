@@ -32,17 +32,20 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 #sub button{font-size:11.5px;letter-spacing:.05em;text-indent:0;padding:10px 10px;border-color:var(--line);color:var(--dim)}
 #again.on,#again.on~#sub button{opacity:1;pointer-events:auto;transform:none}
 #sub button:active,#rbar button:active{background:var(--ink);color:var(--void)}
-#sub button:focus-visible,#rbar button:focus-visible,#watch:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+#sub button:focus-visible,#rbar button:focus-visible,#watch:focus-visible,#reset:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
 #rbar{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:center;gap:10px;pointer-events:none}
 #rbar button{pointer-events:auto;font:13px/1 var(--f-dot);letter-spacing:.12em;color:var(--ink);background:rgba(5,4,10,.7);
   border:1px solid var(--dim);border-radius:2px;padding:12px 16px;cursor:pointer}
-#watch{position:absolute;left:12px;top:80px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
+#watch,#reset{position:absolute;left:12px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
   background:rgba(5,4,10,.6);border:1px solid var(--line);border-radius:2px;padding:8px 10px;cursor:pointer}
+#watch{top:80px}
+#reset{top:116px;color:var(--dim)}
+#reset.sure{color:#ff4f6d;border-color:#ff4f6d}
 #again:active{background:var(--ink);color:var(--void)}
 [hidden]{display:none!important}
 #copy{position:absolute;left:12px;top:44px;font:11px/1 var(--f-dot);letter-spacing:.1em;color:var(--ink);
   background:rgba(5,4,10,.6);border:1px solid var(--line);border-radius:2px;padding:8px 10px;cursor:pointer}
-#recout{position:absolute;left:12px;right:12px;top:116px;height:120px;font:11px/1.4 var(--f-dot);color:var(--ink);
+#recout{position:absolute;left:12px;right:12px;top:152px;height:120px;font:11px/1.4 var(--f-dot);color:var(--ink);
   background:var(--void);border:1px solid var(--dim);border-radius:2px;padding:8px;user-select:text;-webkit-user-select:text}
 #vp{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;
   background:rgba(5,4,10,.88);border-bottom:1px solid var(--line);font:13px/1.6 var(--f-dot);user-select:text;-webkit-user-select:text}
@@ -69,9 +72,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 <div id="stage">
   <canvas id="c" aria-label="的 MATO：全方向から飛んでくる弾を避け続けるゲーム"></canvas>
   <div id="bar"><button id="again" type="button">もう一度</button>
-    <div id="sub"><button id="watch2" type="button" hidden>最高記録をリプレイ</button><button id="copy2" type="button" hidden>記録をコピー</button><button id="home" type="button">ホーム</button></div></div>
+    <div id="sub"><button id="watch2" type="button">今のプレイをリプレイ</button><button id="copy2" type="button" hidden>最高記録をコピー</button><button id="home" type="button">ホーム</button></div></div>
   <div id="rbar" hidden><button id="rspd" type="button">4倍速で見る</button><button id="rhome" type="button">ホーム</button></div>
   <button id="watch" type="button" hidden>最高記録をリプレイ</button>
+  <button id="reset" type="button" hidden>最高記録をリセット</button>
   <button id="copy" type="button" hidden>最高記録をコピー</button>
   <textarea id="recout" readonly hidden aria-label="最高記録の文字列"></textarea>
   <div id="vp" hidden>
@@ -151,7 +155,7 @@ const STYLES=[
  {name:'奔流',rate:1.3, spd:1,   aim:.18,fast:.05,slow:.07,stray:'#5fe0ff',fav:['豪雨','掃射','壁'],flow:true}, // 一方向からの流れ
  {name:'脈動',rate:1.1, spd:1,   aim:.34,fast:.06,slow:.1, stray:'#c79bff',fav:['渦','挟撃','花火'],pulse:true}  // 押し寄せては引く
 ];
-let style=STYLES[0],flowBase=0,lastStyle=-1;
+let style=STYLES[0],flowBase=0,lastStyle=-1,lastRun=null;
 let timers=[],level=0,lastP=null,surgeEnd=0,surgeName='',surgeAt=-9,state='title',T=0,clock=0,bullets=[],sparks=[],emitters=[],stars=[];
 let me={x:0,y:0,trail:[]},spawnAcc=0,nextEvent=0,dieT=0,shake=0;
 const keys={};
@@ -214,13 +218,14 @@ function startGame(){
   locked=false;resize();locked=true;state='play';
   let sd;do{sd=(Math.random()*4294967296^Date.now())>>>0}while(sd%5===lastStyle);lastStyle=sd%5; // 種は毎回ちがう。空模様は種で決まり、前回と同じものは避ける。
   resetSim(sd);
-  recX=[];recY=[];btn.classList.remove('on');copyBtn.hidden=watchBtn.hidden=true;recOut.hidden=true;rbar.hidden=true;rp=null;
+  recX=[];recY=[];btn.classList.remove('on');hideTitleButtons();recOut.hidden=true;rbar.hidden=true;rp=null;
   beep(440,.08);setTimeout(()=>beep(880,.12),80);
 }
 function die(){
   state='dying';dieT=0;shake=calm?0:14;noise(.6,.3);beep(220,.5,.12,'sawtooth',30);buzz([40,30,120]);
   for(let i=0;i<34;i++){const a=Math.random()*TAU,s=(60+Math.random()*320)*U;
     sparks.push({x:me.x,y:me.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:1,c:i%2?COL.me:'#ffffff'})}
+  lastRun={seed,W,H,n:tick,xs:recX,ys:recY}; // 今のプレイ。終了画面のリプレイ用に、手元にだけ持つ
   if(Math.floor(tick*STEP*100+1e-6)/100>best())saveRec();
 }
 
@@ -382,7 +387,7 @@ function drawGame(){
   if(live||state==='dying')txt(T.toFixed(2),W/2,state==='replay'&&!rp.game?H-24*U:34*U,`${22*U}px ${FD}`,INK,'center',2,COL.aim,10);
   if(live&&T<2.8){g.globalAlpha=clamp((2.8-T)*2,0,1)*clamp(T*3,0,1);
     txt('空模様 ─ '+style.name,W/2,58*U,`${13*U}px ${FD}`,style.stray,'center',3*U);g.globalAlpha=1}
-  if(state==='replay'&&rp.game&&(rp.done||Math.sin(clock*4)>-.4))txt('最高記録のリプレイ',18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
+  if(state==='replay'&&rp.game&&(rp.done||Math.sin(clock*4)>-.4))txt(rp.label,18*U,30*U,`${11*U}px ${FD}`,'#8d88a8','left',1);
   if(live&&T-surgeAt<1.8){g.globalAlpha=clamp((1.8-(T-surgeAt))*2,0,1);
     txt('難所 '+level+' ─ '+surgeName,W/2,56*U,`${11*U}px ${FD}`,'#8d88a8','center',2*U);g.globalAlpha=1}
   if(state==='title')drawTitle();
@@ -519,7 +524,7 @@ const End={
     // ---- 進行に合わせた一度きりの合図
     if(!this.locked&&te>=2.05){this.locked=true;beep(660,.25,.05);beep(990,.35,.04);buzz(20)}
     if(!this.slammed&&te>=2.45){this.slammed=true;beep(110,.5,.22,'sine',38);noise(.25,.16);buzz(60);if(!calm&&te<3)shake=9}
-    if(!this.shown&&te>=4.1){this.shown=true;copy2.hidden=watch2.hidden=!getRec();btn.classList.add('on')}
+    if(!this.shown&&te>=4.1){this.shown=true;copy2.hidden=!getRec();btn.classList.add('on')}
     // ---- 地
     g.fillStyle=rgba('#05040a',fa(0,.45));g.fillRect(0,0,W,H);
     const A=fa(.2,.6);
@@ -650,27 +655,39 @@ addEventListener('keyup',e=>{keys[e.key]=false});
 try{
   const all=RANKS.map(r=>r.k+r.line+r.name+r.ruby).join('')+ROMAN.join('')+'第位階─〈〉的秒撃つな。避けろ光なら月まで回届く時間を無傷で生きたより短い一生だった太陽の地球長くいた0123456789,';
   document.fonts.load('800 20px "Shippori Mincho"',all);
-  document.fonts.load('16px "DotGothic16"','最高記録のリプレイ空模様驟雨狙撃濃霧奔流脈動認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
+  document.fonts.load('16px "DotGothic16"','今のプレイ最高記録のリプレイ空模様驟雨狙撃濃霧奔流脈動認証-ABCDEFGHJKLMNPQRSTUVWXYZ難所扇豪雨花火壁十字砲渦掃射輪挟撃MATO画面にふれて開始指をすべらせて避ける一発で終わり音ONOFF自己最高更新秒次の位まであと生存記録光は地球鼓動回km・─／これより上、存在しない。0123456789.');
 }catch(e){}
 
 /* ---------- 最高記録のコピー（タイトル画面） ---------- */
 const getRec=()=>{try{return localStorage.getItem('mato4.rec')||''}catch(e){return''}};
 const $=i=>document.getElementById(i),copy2=$('copy2'),watch2=$('watch2'),watchBtn=$('watch'),rbar=$('rbar'),rspd=$('rspd');
-copyBtn.hidden=watchBtn.hidden=!getRec();
-/* 最高記録のリプレイ：保存してある種と動きから、そのプレイをもう一度計算して映す */
-async function watchBest(){
-  const t=getRec();if(!t)return;let r=null;try{r=await parseRec(t)}catch(e){}if(!r)return;
-  wake();btn.classList.remove('on');copyBtn.hidden=watchBtn.hidden=true;recOut.hidden=true;sparks=[];
-  loadRec(r);rp={r,i:0,speed:1,done:false,dead:false,game:true};state='replay';rbar.hidden=false;rspd.textContent='4倍速で見る';
+const resetBtn=$('reset');
+function showTitleButtons(){const has=!!getRec();copyBtn.hidden=watchBtn.hidden=!has;resetBtn.hidden=!(has||best()>0);
+  copyBtn.textContent='最高記録をコピー';resetBtn.textContent='最高記録をリセット';resetBtn.className=''}
+function hideTitleButtons(){copyBtn.hidden=watchBtn.hidden=resetBtn.hidden=true}
+showTitleButtons();
+/* リプレイ：種と動きから、そのプレイをもう一度計算して映す */
+function watchRun(r,label){
+  wake();btn.classList.remove('on');hideTitleButtons();recOut.hidden=true;sparks=[];
+  loadRec(r);rp={r,i:0,speed:1,done:false,dead:false,game:true,label};state='replay';rbar.hidden=false;rspd.textContent='4倍速で見る';
 }
+async function watchBest(){const t=getRec();if(!t)return;let r=null;try{r=await parseRec(t)}catch(e){}if(r)watchRun(r,'最高記録のリプレイ')}
 function goHome(){
   rp=null;state='title';locked=false;resize();bullets=[];sparks=[];emitters=[];timers=[];spawnAcc=0;shake=0;
-  btn.classList.remove('on');rbar.hidden=true;recOut.hidden=true;copyBtn.textContent='最高記録をコピー';copyBtn.hidden=watchBtn.hidden=!getRec();
+  btn.classList.remove('on');rbar.hidden=true;recOut.hidden=true;showTitleButtons();
 }
+/* 最高記録のリセット：押し間違いで消えないよう、2回押して初めて消す */
+let sureT=0;
+resetBtn.addEventListener('click',()=>{
+  if(resetBtn.className!=='sure'){resetBtn.className='sure';resetBtn.textContent='本当に消す？ もう一度押す';
+    clearTimeout(sureT);sureT=setTimeout(()=>{if(state==='title')showTitleButtons()},3500);return}
+  clearTimeout(sureT);try{localStorage.removeItem('mato4.best');localStorage.removeItem('mato4.rec')}catch(e){}
+  recOut.hidden=true;showTitleButtons();
+});
 function replaySpeed(){if(!rp)return;
   if(rp.done){loadRec(rp.r);sparks=[];rp.i=0;rp.done=rp.dead=false}else rp.speed=rp.speed===4?1:4;
   spd.textContent=rspd.textContent=rp.speed===4?'等速で見る':'4倍速で見る'}
-watchBtn.addEventListener('click',watchBest);watch2.addEventListener('click',watchBest);
+watchBtn.addEventListener('click',watchBest);watch2.addEventListener('click',()=>{if(lastRun)watchRun(lastRun,'今のプレイのリプレイ')});
 $('home').addEventListener('click',goHome);$('rhome').addEventListener('click',goHome);rspd.addEventListener('click',replaySpeed);
 for(const el of [copyBtn,copy2])el.addEventListener('click',async()=>{
   const t=getRec();if(!t)return;
@@ -680,7 +697,7 @@ for(const el of [copyBtn,copy2])el.addEventListener('click',async()=>{
 
 /* ---------- 照合の画面： #verify ---------- */
 const vp=document.getElementById('vp'),vout=document.getElementById('vout'),spd=document.getElementById('spd'),recIn=document.getElementById('rec');
-if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;copyBtn.hidden=watchBtn.hidden=true}
+if(location.hash==='#verify'){state='verify';bullets=[];vp.hidden=false;hideTitleButtons()}
 document.getElementById('chk').addEventListener('click',async()=>{
   wake();vout.className='';spd.hidden=true;rp=null;state='verify';bullets=[];
   const big=document.getElementById('vbig'),say=(cls,head)=>{big.hidden=false;big.className=cls;big.textContent=head;vp.className=cls;
